@@ -110,7 +110,7 @@ Feature: Learner views the course list — core block_myoverview (F01)
     Given I log in as "sv001"
     And I am on the VBS course list page
     And I filter courses by "inprogress"
-    When I filter courses by "allincludinghidden"
+    When I filter courses by "all"
     Then I should see "An toàn lao động"
     And I should see "Kỹ năng mềm"
     And I should see "Nghiệp vụ đã kết thúc"
@@ -122,15 +122,35 @@ Feature: Learner views the course list — core block_myoverview (F01)
 
   @vbs_pagination
   Scenario: FR-F01-005 – Bộ lọc được giữ sau khi tải thêm khóa học
-    # Set page size to 2 so that 3 in-progress courses trigger load-more.
-    Given the following config values are set as admin:
-      | pagingsize | 2 | block_myoverview |
-    And the following "courses" exist:
-      | fullname    | shortname    | startdate      | enddate        |
-      | Khóa học 5  | COURSE5-TEST | ##2026-06-01## | ##2026-08-31## |
+    # Moodle 4.4 stores page size as a user preference (min valid = 12, default = 12).
+    # Background provides 2 in-progress courses; add 11 more to reach 13 total,
+    # which exceeds the default page size of 12 and triggers the "next page" control.
+    Given the following "courses" exist:
+      | fullname    | shortname | startdate      | enddate        |
+      | Khóa học 5  | C05-TEST  | ##2026-06-01## | ##2026-08-31## |
+      | Khóa học 6  | C06-TEST  | ##2026-06-01## | ##2026-08-31## |
+      | Khóa học 7  | C07-TEST  | ##2026-06-01## | ##2026-08-31## |
+      | Khóa học 8  | C08-TEST  | ##2026-06-01## | ##2026-08-31## |
+      | Khóa học 9  | C09-TEST  | ##2026-06-01## | ##2026-08-31## |
+      | Khóa học 10 | C10-TEST  | ##2026-06-01## | ##2026-08-31## |
+      | Khóa học 11 | C11-TEST  | ##2026-06-01## | ##2026-08-31## |
+      | Khóa học 12 | C12-TEST  | ##2026-06-01## | ##2026-08-31## |
+      | Khóa học 13 | C13-TEST  | ##2026-06-01## | ##2026-08-31## |
+      | Khóa học 14 | C14-TEST  | ##2026-06-01## | ##2026-08-31## |
+      | Khóa học 15 | C15-TEST  | ##2026-06-01## | ##2026-08-31## |
     And the following "course enrolments" exist:
-      | user  | course       | role    |
-      | sv001 | COURSE5-TEST | student |
+      | user  | course   | role    |
+      | sv001 | C05-TEST | student |
+      | sv001 | C06-TEST | student |
+      | sv001 | C07-TEST | student |
+      | sv001 | C08-TEST | student |
+      | sv001 | C09-TEST | student |
+      | sv001 | C10-TEST | student |
+      | sv001 | C11-TEST | student |
+      | sv001 | C12-TEST | student |
+      | sv001 | C13-TEST | student |
+      | sv001 | C14-TEST | student |
+      | sv001 | C15-TEST | student |
     And I log in as "sv001"
     And I am on the VBS course list page
     And I filter courses by "inprogress"

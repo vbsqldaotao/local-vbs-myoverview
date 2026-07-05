@@ -202,7 +202,8 @@ class behat_local_vbs_myoverview extends behat_base {
         if (!$found) {
             // Fallback: locate by visible label text for each known classification key.
             $labels = [
-                'allincludinghidden' => ['All', 'Tất cả'],
+                'all'                => ['All', 'Tất cả'],
+                'allincludinghidden' => ['All (including hidden)', 'Tất cả (bao gồm ẩn)'],
                 'inprogress'         => ['In progress', 'Đang diễn ra'],
                 'future'             => ['Future', 'Sắp diễn ra', 'Chưa bắt đầu'],
                 'past'               => ['Past', 'Đã kết thúc'],
@@ -231,8 +232,10 @@ class behat_local_vbs_myoverview extends behat_base {
      * @When I follow the next page in the course list
      */
     public function i_follow_the_next_page_in_the_course_list(): void {
+        // Moodle 4.4 core/paged-content uses data-control="next" on the next-page link.
+        // Older selector variants are retained as fallbacks.
         $btn = $this->find('css',
-            '[data-action="load-more"], .paging-bar-next, a[aria-label="Next page"]');
+            '[data-control="next"], [data-action="load-more"], .paging-bar-next, a[aria-label="Next page"]');
         $btn->click();
         $this->wait_for_pending_js();
     }
@@ -402,7 +405,8 @@ class behat_local_vbs_myoverview extends behat_base {
                 . '  var v = ' . $safevalue . ';'
                 . '  return !!(document.querySelector(\'[data-value="\' + v + \'"].active\')'
                 . '         || document.querySelector(\'[data-filter-type="\' + v + \'"].active\')'
-                . '         || document.querySelector(\'[data-value="\' + v + \'"]\')?.getAttribute("aria-current") === "true");'
+                . '         || document.querySelector(\'[data-value="\' + v + \'"]\')?.getAttribute("aria-current") === "true"'
+                . '         || document.querySelector(\'[data-region="courses-view"]\')?.getAttribute("data-grouping") === v);'
                 . '})()'
             );
             if (!$found) {
