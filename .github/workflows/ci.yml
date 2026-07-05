@@ -109,11 +109,7 @@ jobs:
           cd $MOODLE_ROOT
           php admin/tool/phpunit/cli/init.php
 
-      - name: Run badge_mapper_test
-        run: cd $MOODLE_ROOT && vendor/bin/phpunit --filter badge_mapper_test
-
-      - name: Run state_computer_test
-        run: cd $MOODLE_ROOT && vendor/bin/phpunit --filter state_computer_test
-
-      - name: Run enrich_courses_test
-        run: cd $MOODLE_ROOT && vendor/bin/phpunit --filter enrich_courses_test
+      - name: PHPUnit — local_vbs_myoverview
+        run: |
+          cd $MOODLE_ROOT && vendor/bin/phpunit \
+            --filter '(badge_mapper_test|state_computer_test|enrich_courses_test)'
