@@ -31,9 +31,16 @@ jobs:
           [ "$FAIL" -eq 0 ] && echo "PHP lint passed" || { echo "PHP lint FAILED"; exit 1; }
 
   # ── PHPUnit on Moodle 4.4 ──────────────────────────────────────────────────
+  # moodlehq/moodle-plugin-ci ^4 depends on moodlehq/moodle-local_ci which is
+  # not on Packagist. We set up Moodle directly to avoid that broken dependency.
   phpunit:
     name: PHPUnit (Moodle 4.4 / PHP 8.1)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+
+    env:
+      MOODLE_ROOT: /opt/moodle
+      MOODLE_DATA: /opt/moodledata
+      MOODLE_PHPU_DATA: /opt/phpu_moodledata
 
     services:
       postgres:
@@ -50,7 +57,6 @@ jobs:
           --health-retries 5
 
     steps:
-      # Plugin source checked out into ./plugin so moodle-plugin-ci can find it.
       - uses: actions/checkout@v4
         with:
           path: plugin
@@ -62,54 +68,52 @@ jobs:
           ini-values: max_input_vars=5000
           coverage: none
 
-      - name: Install moodle-plugin-ci
+      - name: Clone Moodle 4.4 (shallow)
         run: |
-          composer global require moodlehq/moodle-plugin-ci ^4 --no-update --no-progress
-          composer global update --no-progress
-          echo "${COMPOSER_HOME:-$HOME/.composer}/vendor/bin" >> "$GITHUB_PATH"
+          git clone --depth=1 --branch MOODLE_404_STABLE \
+            https://github.com/moodle/moodle.git $MOODLE_ROOT
 
-      - name: Install Moodle + plugin
+      - name: Place plugin under local/vbs_myoverview
+        run: cp -r plugin $MOODLE_ROOT/local/vbs_myoverview
+
+      - name: Composer install (Moodle vendor + PHPUnit)
         run: |
-          moodle-plugin-ci install \
-            --plugin ./plugin \
-            --db-type pgsql \
-            --db-user moodle \
-            --db-pass moodle \
-            --db-host 127.0.0.1 \
-            --no-init
-        env:
-          MOODLE_BRANCH: MOODLE_404_STABLE
-          DB: pgsql
+          cd $MOODLE_ROOT
+          composer install --no-interaction --prefer-dist --optimize-autoloader
 
-      - name: Initialise PHPUnit
-        run: moodle-plugin-ci phpunit-init
-        env:
-          MOODLE_BRANCH: MOODLE_404_STABLE
-          DB: pgsql
+      - name: Write Moodle config.php
+        run: |
+          mkdir -p $MOODLE_DATA $MOODLE_PHPU_DATA
+          {
+            echo "<?php"
+            echo "global \$CFG; \$CFG = new stdClass();"
+            echo "\$CFG->dbtype    = 'pgsql';"
+            echo "\$CFG->dblibrary = 'native';"
+            echo "\$CFG->dbhost    = '127.0.0.1';"
+            echo "\$CFG->dbname    = 'moodle';"
+            echo "\$CFG->dbuser    = 'moodle';"
+            echo "\$CFG->dbpass    = 'moodle';"
+            echo "\$CFG->prefix    = 'mdl_';"
+            echo "\$CFG->dboptions = ['dbport' => '5432'];"
+            echo "\$CFG->wwwroot   = 'http://localhost';"
+            echo "\$CFG->dataroot  = '$MOODLE_DATA';"
+            echo "\$CFG->admin     = 'admin';"
+            echo "\$CFG->directorypermissions = 0777;"
+            echo "\$CFG->phpunit_prefix   = 'phpu_';"
+            echo "\$CFG->phpunit_dataroot = '$MOODLE_PHPU_DATA';"
+            echo "require_once(__DIR__ . '/lib/setup.php');"
+          } > $MOODLE_ROOT/config.php
+
+      - name: Initialise PHPUnit environment
+        run: |
+          cd $MOODLE_ROOT
+          php admin/tool/phpunit/cli/init.php
 
       - name: Run badge_mapper_test
-        run: |
-          moodle-plugin-ci phpunit \
-            --filter badge_mapper_test \
-            ./plugin
-        env:
-          MOODLE_BRANCH: MOODLE_404_STABLE
-          DB: pgsql
+        run: cd $MOODLE_ROOT && vendor/bin/phpunit --filter badge_mapper_test
 
       - name: Run state_computer_test
-        run: |
-          moodle-plugin-ci phpunit \
-            --filter state_computer_test \
-            ./plugin
-        env:
-          MOODLE_BRANCH: MOODLE_404_STABLE
-          DB: pgsql
+        run: cd $MOODLE_ROOT && vendor/bin/phpunit --filter state_computer_test
 
       - name: Run enrich_courses_test
-        run: |
-          moodle-plugin-ci phpunit \
-            --filter enrich_courses_test \
-            ./plugin
-        env:
-          MOODLE_BRANCH: MOODLE_404_STABLE
-          DB: pgsql
+        run: cd $MOODLE_ROOT && vendor/bin/phpunit --filter enrich_courses_test
