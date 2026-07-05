@@ -110,6 +110,9 @@ class behat_local_vbs_myoverview extends behat_base {
             $controller->set('contextid', \context_course::instance($course->id)->id);
         }
 
+        // contextid is required (NULL_NOT_ALLOWED) in Moodle 4.4 data persistent.
+        // get_instance_data(true) returns controllers without contextid set, so set it unconditionally.
+        $controller->set('contextid', \context_course::instance($course->id)->id);
         $controller->set('value', $optionvalue);
         $controller->save();
     }
