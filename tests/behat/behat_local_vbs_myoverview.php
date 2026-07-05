@@ -445,9 +445,13 @@ class behat_local_vbs_myoverview extends behat_base {
         // behat_context_helper::escape() produces a valid XPath string literal
         // even when $coursename contains single quotes or double quotes.
         $escaped = \behat_context_helper::escape($coursename);
-        // data-course-id presence confirms per-card scope (not the list container).
+        // Moodle 4.4 block_myoverview/view-cards.mustache fills the coursename block with
+        // a <span class="multiline" title="{{fullname}}"> (plus inner sr-only spans and a
+        // potentially-shortened visible span). Using normalize-space(.) on .coursename would
+        // include sr-only "Course name" text and fail an exact match. Match via @title instead,
+        // which always holds the full (unshortened) course fullname.
         $xpath = "//*[@data-region='course-content' and @data-course-id]"
-               . "[.//*[contains(@class,'coursename') and normalize-space(.)={$escaped}]]";
+               . "[.//*[normalize-space(@title)={$escaped}]]";
         try {
             return $this->find('xpath', $xpath);
         } catch (ElementNotFoundException $e) {
