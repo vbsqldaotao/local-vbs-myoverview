@@ -203,7 +203,7 @@ jobs:
             echo "\$CFG->dbpass    = 'moodle';"
             echo "\$CFG->prefix    = 'mdl_';"
             echo "\$CFG->dboptions = ['dbport' => '5432'];"
-            echo "\$CFG->wwwroot   = 'http://localhost:8000';"
+            echo "\$CFG->wwwroot   = 'http://localhost';"
             echo "\$CFG->dataroot  = '$MOODLE_DATA';"
             echo "\$CFG->admin     = 'admin';"
             echo "\$CFG->directorypermissions = 0777;"
