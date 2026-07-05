@@ -104,6 +104,11 @@ jobs:
             echo "require_once(__DIR__ . '/lib/setup.php');"
           } > $MOODLE_ROOT/config.php
 
+      - name: Install en_AU.UTF-8 locale (required by Moodle bootstrap)
+        run: |
+          sudo locale-gen en_AU.UTF-8
+          sudo update-locale
+
       - name: Initialise PHPUnit environment
         run: |
           cd $MOODLE_ROOT
