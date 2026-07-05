@@ -1,0 +1,115 @@
+name: CI — local-vbs-myoverview
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── PHP lint ───────────────────────────────────────────────────────────────
+  php-lint:
+    name: PHP Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: none
+          coverage: none
+
+      - name: Lint PHP files
+        run: |
+          set -e
+          FAIL=0
+          while IFS= read -r -d '' file; do
+            php -l "$file" >/dev/null || FAIL=1
+          done < <(find classes db -name "*.php" -print0)
+          php -l version.php >/dev/null || FAIL=1
+          [ "$FAIL" -eq 0 ] && echo "PHP lint passed" || { echo "PHP lint FAILED"; exit 1; }
+
+  # ── PHPUnit on Moodle 4.4 ──────────────────────────────────────────────────
+  phpunit:
+    name: PHPUnit (Moodle 4.4 / PHP 8.1)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: moodle
+          POSTGRES_PASSWORD: moodle
+          POSTGRES_DB: moodle
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # Plugin source checked out into ./plugin so moodle-plugin-ci can find it.
+      - uses: actions/checkout@v4
+        with:
+          path: plugin
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: pgsql, zip, gd, curl, soap, intl, mbstring, xml
+          ini-values: max_input_vars=5000
+          coverage: none
+
+      - name: Install moodle-plugin-ci
+        run: |
+          composer global require moodlehq/moodle-plugin-ci ^4 --no-update --no-progress
+          composer global update --no-progress
+          echo "${COMPOSER_HOME:-$HOME/.composer}/vendor/bin" >> "$GITHUB_PATH"
+
+      - name: Install Moodle + plugin
+        run: |
+          moodle-plugin-ci install \
+            --plugin ./plugin \
+            --db-type pgsql \
+            --db-user moodle \
+            --db-pass moodle \
+            --db-host 127.0.0.1 \
+            --no-init
+        env:
+          MOODLE_BRANCH: MOODLE_404_STABLE
+          DB: pgsql
+
+      - name: Initialise PHPUnit
+        run: moodle-plugin-ci phpunit-init
+        env:
+          MOODLE_BRANCH: MOODLE_404_STABLE
+          DB: pgsql
+
+      - name: Run badge_mapper_test
+        run: |
+          moodle-plugin-ci phpunit \
+            --filter badge_mapper_test \
+            ./plugin
+        env:
+          MOODLE_BRANCH: MOODLE_404_STABLE
+          DB: pgsql
+
+      - name: Run state_computer_test
+        run: |
+          moodle-plugin-ci phpunit \
+            --filter state_computer_test \
+            ./plugin
+        env:
+          MOODLE_BRANCH: MOODLE_404_STABLE
+          DB: pgsql
+
+      - name: Run enrich_courses_test
+        run: |
+          moodle-plugin-ci phpunit \
+            --filter enrich_courses_test \
+            ./plugin
+        env:
+          MOODLE_BRANCH: MOODLE_404_STABLE
+          DB: pgsql
