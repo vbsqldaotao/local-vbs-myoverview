@@ -62,54 +62,32 @@ jobs:
           ini-values: max_input_vars=5000
           coverage: none
 
-      - name: Install moodle-plugin-ci
+      - name: Initialise moodle-plugin-ci
+        # composer create-project is required (not global require) so that the
+        # "repositories" block in moodle-plugin-ci's own composer.json is
+        # inherited — without it composer cannot resolve moodle-local_ci.
         run: |
-          composer global require moodlehq/moodle-plugin-ci ^4 --no-update --no-progress
-          composer global update --no-progress
-          echo "${COMPOSER_HOME:-$HOME/.composer}/vendor/bin" >> "$GITHUB_PATH"
+          composer create-project -n --no-dev --prefer-dist moodlehq/moodle-plugin-ci ci ^4
+          echo $(cd ci/bin; pwd) >> $GITHUB_PATH
+          echo $(cd ci/vendor/bin; pwd) >> $GITHUB_PATH
+          sudo locale-gen en_AU.UTF-8
+          echo "NVM_DIR=$HOME/.nvm" >> $GITHUB_ENV
 
       - name: Install Moodle + plugin
+        # Omit --no-init so that phpunit bootstrap runs as part of install.
         run: |
           moodle-plugin-ci install \
             --plugin ./plugin \
             --db-type pgsql \
             --db-user moodle \
             --db-pass moodle \
-            --db-host 127.0.0.1 \
-            --no-init
+            --db-host 127.0.0.1
         env:
           MOODLE_BRANCH: MOODLE_404_STABLE
           DB: pgsql
 
-      - name: Initialise PHPUnit
-        run: moodle-plugin-ci phpunit-init
-        env:
-          MOODLE_BRANCH: MOODLE_404_STABLE
-          DB: pgsql
-
-      - name: Run badge_mapper_test
-        run: |
-          moodle-plugin-ci phpunit \
-            --filter badge_mapper_test \
-            ./plugin
-        env:
-          MOODLE_BRANCH: MOODLE_404_STABLE
-          DB: pgsql
-
-      - name: Run state_computer_test
-        run: |
-          moodle-plugin-ci phpunit \
-            --filter state_computer_test \
-            ./plugin
-        env:
-          MOODLE_BRANCH: MOODLE_404_STABLE
-          DB: pgsql
-
-      - name: Run enrich_courses_test
-        run: |
-          moodle-plugin-ci phpunit \
-            --filter enrich_courses_test \
-            ./plugin
+      - name: PHPUnit
+        run: moodle-plugin-ci phpunit ./plugin
         env:
           MOODLE_BRANCH: MOODLE_404_STABLE
           DB: pgsql
