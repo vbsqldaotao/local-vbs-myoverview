@@ -145,13 +145,14 @@ class behat_local_vbs_myoverview extends behat_base {
      * @param string $keyword search term
      */
     public function i_search_courses_for(string $keyword): void {
-        // W2 fix: narrow to the myoverview block's own filter input.
+        // W2 fix: narrow to the myoverview block's own search input.
+        // Moodle 4.4 uses data-action="search" (core/search_input_auto template).
         $input = $this->find('css',
-            '[data-region="myoverview"] input[data-action="filter"]');
+            '[data-region="myoverview"] input[data-action="search"]');
         $input->setValue($keyword);
-        // Trigger the input/keyup events so AMD view.js re-fetches courses.
+        // Trigger the input event so AMD view.js re-fetches courses.
         $this->execute_script(
-            'var el = document.querySelector(\'[data-region="myoverview"] input[data-action="filter"]\');'
+            'var el = document.querySelector(\'[data-region="myoverview"] input[data-action="search"]\');'
             . 'if (el) {'
             . '  el.dispatchEvent(new Event("input", {bubbles: true}));'
             . '  el.dispatchEvent(new Event("keyup", {bubbles: true}));'

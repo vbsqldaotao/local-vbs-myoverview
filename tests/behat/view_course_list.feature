@@ -40,7 +40,7 @@ Feature: Learner views the course list — core block_myoverview (F01)
   Scenario: FR-F01-001 – Học viên không có khóa học thấy trạng thái rỗng
     Given I log in as "svnew"
     When I am on the VBS course list page
-    Then I should see "No courses"
+    Then I should see "not enrolled"
 
   # ─────────────────────────────────────────────────────────────────
   # FR-F01-002: Tìm kiếm theo từ khóa
