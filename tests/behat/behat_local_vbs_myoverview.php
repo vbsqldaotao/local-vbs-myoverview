@@ -17,11 +17,9 @@
 /**
  * Behat step definitions for local_vbs_myoverview (F01 – Course list).
  *
- * Covers:
- * - Data setup: set delivery_mode custom field on a course.
- * - Navigation: visit the My Courses page.
- * - Interaction: search, timeline filter.
- * - Assertions: VBS badge presence/absence, badge order, date range.
+ * These steps are discovered by Moodle's Behat runner from all installed
+ * plugins, so they are also available to tests in vbs-theme repo when both
+ * plugins are installed (see tests/behat/vbs_f01_course_badges.feature there).
  *
  * @package    local_vbs_myoverview
  * @category   test
@@ -49,8 +47,10 @@ class behat_local_vbs_myoverview extends behat_base {
      * Ensures the delivery_mode field is provisioned (calls the installer) before
      * writing data, so this step works even on a freshly-reset test DB.
      *
-     * The field stores a 1-based option index (customfield_select convention).
-     * Options in configdata: "online\noffline\nblended" → indices 1, 2, 3.
+     * customfield_select stores a 1-based option index. Options in configdata:
+     * "online\noffline\nblended" → stored values 1, 2, 3. export_value() returns
+     * the option text ("online", "offline", "blended") which badge_mapper receives
+     * after strtolower() in enrich_courses::get_delivery_mode().
      *
      * @Given the course :shortname has delivery mode :mode
      *
@@ -78,7 +78,7 @@ class behat_local_vbs_myoverview extends behat_base {
             throw new \moodle_exception('Field delivery_mode not found after ensure_delivery_mode_field().');
         }
 
-        // Determine the 1-based option index from the field's configdata.
+        // Determine the 1-based option index from the field's stored configdata JSON.
         $fieldrecord = $DB->get_record('customfield_field',
             ['shortname' => \local_vbs_myoverview\local\customfield_installer::FIELD_SHORTNAME], '*', MUST_EXIST);
         $configdata  = json_decode($fieldrecord->configdata, true);
@@ -95,8 +95,8 @@ class behat_local_vbs_myoverview extends behat_base {
         $optionvalue = (string)($idx + 1); // customfield_select uses 1-based index.
 
         // Get or create the data controller for this course/field pair.
-        $instdata    = $handler->get_instance_data($course->id, true);
-        $controller  = null;
+        $instdata   = $handler->get_instance_data($course->id, true);
+        $controller = null;
         foreach ($instdata as $d) {
             if ($d->get_field()->get('id') === (int)$fieldobj->get('id')) {
                 $controller = $d;
@@ -126,6 +126,7 @@ class behat_local_vbs_myoverview extends behat_base {
     public function i_am_on_the_vbs_course_list_page(): void {
         $url = new \moodle_url('/my/courses.php');
         $this->getSession()->visit($this->locate_path($url->out_as_local_url(false)));
+        // W1 fix: use parent's wait_for_pending_js() — do not override.
         $this->wait_for_pending_js();
     }
 
@@ -134,26 +135,28 @@ class behat_local_vbs_myoverview extends behat_base {
     // ─────────────────────────────────────────────────────────────
 
     /**
-     * Type a keyword into the block_myoverview search box and wait for results.
+     * Type a keyword into the block_myoverview search box.
      *
-     * The block_myoverview search input has [data-action="filter"] and listens
-     * for 'keyup' events to filter the course list dynamically.
+     * W2 fix: scope the selector to [data-region="myoverview"] to avoid
+     * matching nav-bar or global search inputs on the same page.
      *
      * @When I search courses for :keyword
      *
      * @param string $keyword search term
      */
     public function i_search_courses_for(string $keyword): void {
-        $input = $this->find('css', 'input[data-action="filter"], input[placeholder="Search"], input[aria-label="Search courses"]');
+        // W2 fix: narrow to the myoverview block's own filter input.
+        $input = $this->find('css',
+            '[data-region="myoverview"] input[data-action="filter"]');
         $input->setValue($keyword);
-        // Trigger the input event so AMD handlers fire.
-        $this->execute_script("
-            var el = document.querySelector('input[data-action=\"filter\"], input[placeholder=\"Search\"]');
-            if (el) {
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('keyup', { bubbles: true }));
-            }
-        ");
+        // Trigger the input/keyup events so AMD view.js re-fetches courses.
+        $this->execute_script(
+            'var el = document.querySelector(\'[data-region="myoverview"] input[data-action="filter"]\');'
+            . 'if (el) {'
+            . '  el.dispatchEvent(new Event("input", {bubbles: true}));'
+            . '  el.dispatchEvent(new Event("keyup", {bubbles: true}));'
+            . '}'
+        );
         $this->wait_for_pending_js();
     }
 
@@ -167,33 +170,36 @@ class behat_local_vbs_myoverview extends behat_base {
     }
 
     /**
-     * Click the block_myoverview timeline filter button that corresponds to the
-     * given classification key.
+     * Click the block_myoverview timeline filter button for the given classification key.
      *
-     * Accepted values match the core `classification` parameter of
-     * core_course_get_enrolled_courses_by_timeline_classification:
+     * Accepted keys match the core classification parameter:
      *   allincludinghidden | inprogress | future | past | hidden | favourites
+     *
+     * W4 fix: use json_encode() to safely embed the classification value in JS
+     * so that any special characters in the value cannot break the querySelector.
      *
      * @When I filter courses by :classification
      *
      * @param string $classification core timeline classification key
      */
     public function i_filter_courses_by(string $classification): void {
-        // block_myoverview renders filter buttons with data-filter-type or data-value attributes.
-        // Try data-value first (Moodle 4.4+), fall back to data-filter-type.
+        // W4 fix: json_encode() safely quotes the value for the JS string literal.
+        $safevalue = json_encode($classification);
         $script = <<<JS
         (function() {
-            var btn = document.querySelector('[data-value="{$classification}"]')
-                   || document.querySelector('[data-filter-type="{$classification}"]')
-                   || document.querySelector('[data-filtername="{$classification}"]');
+            var v = {$safevalue};
+            var btn = document.querySelector('[data-value="' + v + '"]')
+                   || document.querySelector('[data-filter-type="' + v + '"]')
+                   || document.querySelector('[data-filtername="' + v + '"]');
             if (btn) { btn.click(); return true; }
             return false;
         })();
         JS;
 
         $found = $this->evaluate_script($script);
+
         if (!$found) {
-            // Fallback: look for a button/tab whose text matches the display label.
+            // Fallback: locate by visible label text for each known classification key.
             $labels = [
                 'allincludinghidden' => ['All', 'Tất cả'],
                 'inprogress'         => ['In progress', 'Đang diễn ra'],
@@ -205,7 +211,8 @@ class behat_local_vbs_myoverview extends behat_base {
             foreach ($textcandidates as $label) {
                 try {
                     $btn = $this->find('xpath',
-                        "//button[normalize-space(text())='$label'] | //a[normalize-space(text())='$label']");
+                        '//button[normalize-space(text())=' . \behat_context_helper::escape($label) . ']'
+                        . '|//a[normalize-space(text())=' . \behat_context_helper::escape($label) . ']');
                     $btn->click();
                     break;
                 } catch (ElementNotFoundException $e) {
@@ -218,47 +225,47 @@ class behat_local_vbs_myoverview extends behat_base {
     }
 
     /**
-     * Navigate to the next page in the course list (load-more or pagination link).
+     * Click the "load more" button or next-page link in the course list.
      *
      * @When I follow the next page in the course list
      */
     public function i_follow_the_next_page_in_the_course_list(): void {
-        $btn = $this->find('css', '[data-action="load-more"], .course-list-next-page, a[aria-label="Next page"]');
+        $btn = $this->find('css',
+            '[data-action="load-more"], .paging-bar-next, a[aria-label="Next page"]');
         $btn->click();
         $this->wait_for_pending_js();
     }
 
     // ─────────────────────────────────────────────────────────────
-    // Assertion steps — VBS presentation contract
+    // Assertion steps — VBS presentation contract (delta D6/D7)
+    // Used by both this plugin's tests and vbs-theme/tests/behat/.
     // ─────────────────────────────────────────────────────────────
 
     /**
-     * Assert that a specific VBS badge label is present on the course card for
-     * the named course.
+     * Assert a VBS badge label appears on the named course's card.
      *
-     * The VBS badges are injected by myoverview_enricher.js via a WS call after
-     * the initial page render; behat_base::spin() retries the assertion until the
-     * JS overlay has completed and the badge appears in the DOM.
+     * Uses spin() because the VBS JS overlay (myoverview_enricher.js) injects
+     * the badge HTML asynchronously after the initial page render.
      *
      * @Then the course card for :coursename shows the vbs badge :label
      *
-     * @param string $coursename visible course name (fullname)
-     * @param string $label      expected badge text (e.g. "Online", "In progress", "Assigned")
+     * @param string $coursename visible course fullname
+     * @param string $label      expected badge text (locale-dependent; force en in Background)
      */
     public function the_course_card_shows_vbs_badge(string $coursename, string $label): void {
         $this->spin(function() use ($coursename, $label) {
-            $card = $this->find_course_card($coursename);
-            $badgecontainer = $card->find('css', '.vbs-card-badges');
+            $card            = $this->find_course_card($coursename);
+            $badgecontainer  = $card->find('css', '.vbs-card-badges');
             if (!$badgecontainer) {
                 throw new ExpectationException(
-                    "Course card for '$coursename' does not have a .vbs-card-badges element yet.",
+                    "Course card for '$coursename' has no .vbs-card-badges element yet.",
                     $this->getSession()
                 );
             }
-            $text = $badgecontainer->getText();
-            if (strpos($text, $label) === false) {
+            if (strpos($badgecontainer->getText(), $label) === false) {
                 throw new ExpectationException(
-                    "Course card for '$coursename' has badges '$text' — expected to contain '$label'.",
+                    "Course card for '$coursename' badges = '{$badgecontainer->getText()}'"
+                    . " — expected to contain '$label'.",
                     $this->getSession()
                 );
             }
@@ -267,30 +274,30 @@ class behat_local_vbs_myoverview extends behat_base {
     }
 
     /**
-     * Assert that the course card for the named course does NOT show any delivery
-     * mode chip (the optional first badge is absent when delivery_mode is unset).
+     * Assert that the delivery-mode chip is absent on the named course's card.
+     *
+     * The delivery chip uses badge_mapper::OUTLINE_DELIVERY classes
+     * ('border border-secondary text-body bg-white'). When delivery_mode is
+     * unset, only lifecycle + enrollment badges are rendered (W5 note: a semantic
+     * data-badge-type="delivery" attribute on the chip would make this more
+     * robust; tracked as tech debt F01).
      *
      * @Then the course card for :coursename does not show a delivery badge
      *
-     * @param string $coursename visible course name
+     * @param string $coursename visible course fullname
      */
     public function the_course_card_does_not_show_delivery_badge(string $coursename): void {
         $this->spin(function() use ($coursename) {
-            $card = $this->find_course_card($coursename);
+            $card           = $this->find_course_card($coursename);
             $badgecontainer = $card->find('css', '.vbs-card-badges');
             if (!$badgecontainer) {
-                // No badge container at all is acceptable — delivery badge absent.
-                return true;
+                return true; // No badge container → no delivery badge either.
             }
-            // Delivery chip must NOT carry the OUTLINE_DELIVERY class combo.
-            $outlinecss = 'border border-secondary text-body bg-white';
-            $spans = $badgecontainer->findAll('css', 'span.badge');
-            foreach ($spans as $span) {
+            foreach ($badgecontainer->findAll('css', 'span.badge') as $span) {
                 $classes = $span->getAttribute('class') ?? '';
-                // Check for all three classes that form the delivery outline style.
                 if (str_contains($classes, 'border-secondary') && str_contains($classes, 'bg-white')) {
                     throw new ExpectationException(
-                        "Course card for '$coursename' should NOT have a delivery badge, but one was found.",
+                        "Course card for '$coursename' should NOT have a delivery badge but one was found.",
                         $this->getSession()
                     );
                 }
@@ -300,12 +307,11 @@ class behat_local_vbs_myoverview extends behat_base {
     }
 
     /**
-     * Assert that the course card for the named course shows a date range element
-     * (.vbs-card-dates) with non-empty text.
+     * Assert the course card shows a non-empty .vbs-card-dates element.
      *
      * @Then the course card for :coursename shows a date range
      *
-     * @param string $coursename visible course name
+     * @param string $coursename visible course fullname
      */
     public function the_course_card_shows_a_date_range(string $coursename): void {
         $this->spin(function() use ($coursename) {
@@ -322,11 +328,11 @@ class behat_local_vbs_myoverview extends behat_base {
     }
 
     /**
-     * Assert that the course card for the named course does NOT show a date range.
+     * Assert the course card has NO .vbs-card-dates element (or an empty one).
      *
      * @Then the course card for :coursename does not show a date range
      *
-     * @param string $coursename visible course name
+     * @param string $coursename visible course fullname
      */
     public function the_course_card_does_not_show_date_range(string $coursename): void {
         $this->spin(function() use ($coursename) {
@@ -334,7 +340,7 @@ class behat_local_vbs_myoverview extends behat_base {
             $daterange = $card->find('css', '.vbs-card-dates');
             if ($daterange && trim($daterange->getText()) !== '') {
                 throw new ExpectationException(
-                    "Course card for '$coursename' should NOT show a date range, but '.vbs-card-dates' contains: "
+                    "Course card for '$coursename' should NOT show a date range; got: "
                     . $daterange->getText(),
                     $this->getSession()
                 );
@@ -344,33 +350,32 @@ class behat_local_vbs_myoverview extends behat_base {
     }
 
     /**
-     * Assert that the VBS badges on the course card appear in the exact CSV order
-     * given: "label1, label2, label3".
+     * Assert that the VBS badges on the card appear in the exact CSV order given.
      *
      * @Then the course card for :coursename has badge order :csvlabels
      *
-     * @param string $coursename visible course name
+     * @param string $coursename visible course fullname
      * @param string $csvlabels  comma-separated expected badge labels in order
      */
     public function the_course_card_has_badge_order(string $coursename, string $csvlabels): void {
         $expected = array_map('trim', explode(',', $csvlabels));
 
         $this->spin(function() use ($coursename, $expected) {
-            $card            = $this->find_course_card($coursename);
-            $badgecontainer  = $card->find('css', '.vbs-card-badges');
+            $card           = $this->find_course_card($coursename);
+            $badgecontainer = $card->find('css', '.vbs-card-badges');
             if (!$badgecontainer) {
                 throw new ExpectationException(
                     "Course card for '$coursename' has no .vbs-card-badges yet.",
                     $this->getSession()
                 );
             }
-            $spans  = $badgecontainer->findAll('css', 'span.badge');
-            $actual = array_map(fn($s) => trim($s->getText()), $spans);
-
+            $actual = array_map(fn($s) => trim($s->getText()),
+                $badgecontainer->findAll('css', 'span.badge'));
             if ($actual !== $expected) {
                 throw new ExpectationException(
-                    "Badge order for '$coursename' expected [" . implode(', ', $expected)
-                    . "] but got [" . implode(', ', $actual) . "].",
+                    "Badge order for '$coursename': expected ["
+                    . implode(', ', $expected) . "] — got ["
+                    . implode(', ', $actual) . "].",
                     $this->getSession()
                 );
             }
@@ -379,23 +384,29 @@ class behat_local_vbs_myoverview extends behat_base {
     }
 
     /**
-     * Assert that the active timeline filter is the given classification key.
+     * Assert that the active timeline filter button shows the given classification key.
      *
-     * block_myoverview marks the active filter button with an `active` CSS class.
+     * block_myoverview marks the active filter with aria-current="true" or an
+     * `active` CSS class.
      *
      * @Then the active filter is still :classification
      *
      * @param string $classification timeline classification key
      */
     public function the_active_filter_is_still(string $classification): void {
-        $this->spin(function() use ($classification) {
-            $active = $this->find('css',
-                "[data-value=\"{$classification}\"].active, "
-                . "[data-filter-type=\"{$classification}\"].active, "
-                . ".active[data-value=\"{$classification}\"]");
-            if (!$active) {
+        $safevalue = json_encode($classification);
+        $this->spin(function() use ($safevalue) {
+            $found = $this->evaluate_script(
+                '(function() {'
+                . '  var v = ' . $safevalue . ';'
+                . '  return !!(document.querySelector(\'[data-value="\' + v + \'"].active\')'
+                . '         || document.querySelector(\'[data-filter-type="\' + v + \'"].active\')'
+                . '         || document.querySelector(\'[data-value="\' + v + \'"]\')?.getAttribute("aria-current") === "true");'
+                . '})()'
+            );
+            if (!$found) {
                 throw new ExpectationException(
-                    "Expected active filter '$classification' not found.",
+                    "Expected active filter $safevalue not found.",
                     $this->getSession()
                 );
             }
@@ -408,37 +419,34 @@ class behat_local_vbs_myoverview extends behat_base {
     // ─────────────────────────────────────────────────────────────
 
     /**
-     * Find the course card DOM element for a course by its fullname.
+     * Find the per-card DOM element for a course by its fullname.
      *
-     * block_myoverview renders cards inside [data-region="course-content"]; each
-     * card contains the course name as an .aalink.coursename link.
+     * Moodle 4.4 renders each course card as:
+     *   <div data-region="course-content" data-course-id="{id}">
+     * The `data-course-id` attribute confirms this is a per-card element, not a
+     * list container (W3 fix).
+     *
+     * B4 fix: use behat_context_helper::escape() instead of addslashes() for
+     * XPath 1.0 — handles apostrophes and double quotes correctly.
      *
      * @param string $coursename visible course fullname
      * @return \Behat\Mink\Element\NodeElement
-     * @throws ExpectationException if no matching card is found
+     * @throws ExpectationException
      */
     protected function find_course_card(string $coursename): \Behat\Mink\Element\NodeElement {
-        // XPath: find [data-region="course-content"] whose descendant anchor text = $coursename.
-        $xpath = "//*[@data-region='course-content'][.//*[contains(@class,'coursename') "
-               . "and normalize-space(.)='" . addslashes($coursename) . "']]";
+        // behat_context_helper::escape() produces a valid XPath string literal
+        // even when $coursename contains single quotes or double quotes.
+        $escaped = \behat_context_helper::escape($coursename);
+        // data-course-id presence confirms per-card scope (not the list container).
+        $xpath = "//*[@data-region='course-content' and @data-course-id]"
+               . "[.//*[contains(@class,'coursename') and normalize-space(.)={$escaped}]]";
         try {
             return $this->find('xpath', $xpath);
         } catch (ElementNotFoundException $e) {
             throw new ExpectationException(
-                "No course card found for '$coursename'. Is the course visible on this page?",
+                "No course card found for '$coursename'. Is the course visible on the current page?",
                 $this->getSession()
             );
-        }
-    }
-
-    /**
-     * Wait for all pending JavaScript (AMD modules, fetch calls) to complete.
-     *
-     * Delegates to the standard Moodle/Behat JS idle check.
-     */
-    protected function wait_for_pending_js(): void {
-        if ($this->running_javascript()) {
-            $this->getSession()->wait(8000, '(typeof M === "undefined" || typeof M.util === "undefined" || M.util.pending_js && M.util.pending_js.length === 0)');
         }
     }
 }
