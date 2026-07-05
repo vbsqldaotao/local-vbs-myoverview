@@ -237,8 +237,8 @@ jobs:
       - name: Run Behat — @local_vbs_myoverview
         run: |
           cd $MOODLE_ROOT
-          php admin/tool/behat/cli/run.php \
+          vendor/bin/behat \
+            --config $BEHAT_DATA/behatrun/behat/behat.yml \
             --profile=default \
             --tags='@local_vbs_myoverview' \
-            --format=pretty \
-            --out='-'
+            --format=pretty
