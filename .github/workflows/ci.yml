@@ -191,6 +191,11 @@ jobs:
 
       - name: Write Moodle config.php (Behat)
         run: |
+          # Selenium runs in a Docker container; Chrome must reach the PHP server
+          # via the Docker bridge gateway (not localhost, which is the container's loopback).
+          SELENIUM_ID=$(docker ps --filter "ancestor=selenium/standalone-chrome:4" -q | head -1)
+          BEHAT_HOST=$(docker inspect "$SELENIUM_ID" --format '{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}')
+          echo "behat_wwwroot will use Docker gateway: $BEHAT_HOST"
           mkdir -p $MOODLE_DATA $BEHAT_DATA
           {
             echo "<?php"
@@ -209,7 +214,7 @@ jobs:
             echo "\$CFG->directorypermissions = 0777;"
             echo "\$CFG->behat_prefix   = 'bht_';"
             echo "\$CFG->behat_dataroot = '$BEHAT_DATA';"
-            echo "\$CFG->behat_wwwroot  = 'http://localhost:8000';"
+            echo "\$CFG->behat_wwwroot  = 'http://$BEHAT_HOST:8000';"
             echo "\$CFG->behat_profiles = ["
             echo "  'default' => ["
             echo "    'browser' => 'chrome',"
