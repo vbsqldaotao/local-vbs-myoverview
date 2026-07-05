@@ -87,6 +87,12 @@ class state_computer {
      * @return bool
      */
     protected function is_course_complete(\stdClass $course, int $userid): bool {
+        global $CFG;
+        // completion_info is a legacy global class in lib/completionlib.php and is NOT
+        // PSR-4 autoloaded. A web page usually pulls it in transitively, but a bare
+        // external/AJAX WS context does not — require it explicitly (idempotent).
+        require_once($CFG->dirroot . '/lib/completionlib.php');
+
         $info = new \completion_info($course);
         if (!$info->is_enabled()) {
             return false;
