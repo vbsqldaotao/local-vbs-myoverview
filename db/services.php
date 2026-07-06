@@ -35,4 +35,15 @@ $functions = [
         'capabilities' => '',
         'services'    => [],
     ],
+    'local_vbs_myoverview_get_learning_progress' => [
+        'classname'   => 'local_vbs_myoverview\external\get_learning_progress',
+        'methodname'  => 'execute',
+        'description' => 'Return the personal learning-progress payload (active/completed courses, '
+            . 'derived training plan, certificates) for a learner. Read-only; a learner may only read '
+            . 'their own data unless they hold moodle/user:viewdetails on the target user.',
+        'type'        => 'read',
+        'ajax'        => true,
+        'capabilities' => '',
+        'services'    => [],
+    ],
 ];
