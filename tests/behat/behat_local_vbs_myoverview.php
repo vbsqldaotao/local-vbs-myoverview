@@ -257,6 +257,13 @@ class behat_local_vbs_myoverview extends behat_base {
      * Uses spin() because the VBS JS overlay (myoverview_enricher.js) injects
      * the badge HTML asynchronously after the initial page render.
      *
+     * W5 fix (VBS-141): anchor on the semantic `data-badge-type` attribute
+     * rather than a substring of the whole container text. Each VBS badge is
+     * rendered by coursecard.mustache as
+     *   <span class="badge ..." data-badge-type="delivery|lifecycle|enrollment">Label</span>
+     * so the label is matched against the text of an actual typed badge element,
+     * which no longer silently passes if the label leaks in from unrelated markup.
+     *
      * @Then the course card for :coursename shows the vbs badge :label
      *
      * @param string $coursename visible course fullname
@@ -264,33 +271,38 @@ class behat_local_vbs_myoverview extends behat_base {
      */
     public function the_course_card_shows_vbs_badge(string $coursename, string $label): void {
         $this->spin(function() use ($coursename, $label) {
-            $card            = $this->find_course_card($coursename);
-            $badgecontainer  = $card->find('css', '.vbs-card-badges');
-            if (!$badgecontainer) {
+            $card   = $this->find_course_card($coursename);
+            $badges = $card->findAll('css', '.vbs-card-badges [data-badge-type]');
+            if (!$badges) {
                 throw new ExpectationException(
-                    "Course card for '$coursename' has no .vbs-card-badges element yet.",
+                    "Course card for '$coursename' has no [data-badge-type] badge element yet.",
                     $this->getSession()
                 );
             }
-            if (strpos($badgecontainer->getText(), $label) === false) {
-                throw new ExpectationException(
-                    "Course card for '$coursename' badges = '{$badgecontainer->getText()}'"
-                    . " — expected to contain '$label'.",
-                    $this->getSession()
-                );
+            foreach ($badges as $badge) {
+                if (str_contains(trim($badge->getText()), trim($label))) {
+                    return true;
+                }
             }
-            return true;
+            $found = implode(', ', array_map(fn($b) => trim($b->getText()), $badges));
+            throw new ExpectationException(
+                "Course card for '$coursename' badges = '$found'"
+                . " — expected a data-badge-type badge with label '$label'.",
+                $this->getSession()
+            );
         });
     }
 
     /**
      * Assert that the delivery-mode chip is absent on the named course's card.
      *
-     * The delivery chip uses badge_mapper::OUTLINE_DELIVERY classes
-     * ('border border-secondary text-body bg-white'). When delivery_mode is
-     * unset, only lifecycle + enrollment badges are rendered (W5 note: a semantic
-     * data-badge-type="delivery" attribute on the chip would make this more
-     * robust; tracked as tech debt F01).
+     * When delivery_mode is unset, badge_mapper omits the delivery badge and
+     * only lifecycle + enrollment badges are rendered.
+     *
+     * W5 fix (VBS-141): assert on the semantic `data-badge-type="delivery"`
+     * anchor instead of matching badge_mapper::OUTLINE_DELIVERY outline classes
+     * ('border-secondary' + 'bg-white'), which would silently pass if the theme
+     * changed the outline styling.
      *
      * @Then the course card for :coursename does not show a delivery badge
      *
@@ -298,19 +310,13 @@ class behat_local_vbs_myoverview extends behat_base {
      */
     public function the_course_card_does_not_show_delivery_badge(string $coursename): void {
         $this->spin(function() use ($coursename) {
-            $card           = $this->find_course_card($coursename);
-            $badgecontainer = $card->find('css', '.vbs-card-badges');
-            if (!$badgecontainer) {
-                return true; // No badge container → no delivery badge either.
-            }
-            foreach ($badgecontainer->findAll('css', 'span.badge') as $span) {
-                $classes = $span->getAttribute('class') ?? '';
-                if (str_contains($classes, 'border-secondary') && str_contains($classes, 'bg-white')) {
-                    throw new ExpectationException(
-                        "Course card for '$coursename' should NOT have a delivery badge but one was found.",
-                        $this->getSession()
-                    );
-                }
+            $card     = $this->find_course_card($coursename);
+            $delivery = $card->find('css', '.vbs-card-badges [data-badge-type="delivery"]');
+            if ($delivery !== null) {
+                throw new ExpectationException(
+                    "Course card for '$coursename' should NOT have a delivery badge but one was found.",
+                    $this->getSession()
+                );
             }
             return true;
         });
@@ -379,8 +385,10 @@ class behat_local_vbs_myoverview extends behat_base {
                     $this->getSession()
                 );
             }
+            // W5 fix (VBS-141): iterate typed badge elements in DOM order via the
+            // data-badge-type anchor instead of the generic span.badge selector.
             $actual = array_map(fn($s) => trim($s->getText()),
-                $badgecontainer->findAll('css', 'span.badge'));
+                $badgecontainer->findAll('css', '[data-badge-type]'));
             if ($actual !== $expected) {
                 throw new ExpectationException(
                     "Badge order for '$coursename': expected ["
