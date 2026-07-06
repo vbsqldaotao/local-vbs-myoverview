@@ -1,0 +1,64 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_vbs_myoverview/progress_section_plan
+
+    Training-plan section body. Rendered client-side by the progress AMD module,
+    which pre-resolves every label and formats the dates. All dynamic text is
+    already localised in the context — this template only lays it out.
+
+    Example context (json):
+    {
+        "hasplan": true,
+        "percent": 38,
+        "countlabel": "3/8 items",
+        "barlabel": "3 of 8 items completed",
+        "hasitems": true,
+        "items": [
+            {"coursename": "Basic accounting", "statuslabel": "In progress",
+             "statusclass": "badge-warning", "duetext": "01/10/2026"}
+        ],
+        "emptytext": "No training plan for 2026."
+    }
+}}
+{{#hasplan}}
+    <div class="vbs-lp-plan-summary">
+        <div class="progress vbs-lp-progress" role="progressbar"
+             aria-valuenow="{{percent}}" aria-valuemin="0" aria-valuemax="100"
+             aria-label="{{barlabel}}">
+            <div class="progress-bar bg-primary" style="width: {{percent}}%;"></div>
+        </div>
+        <span class="vbs-lp-plan-count">{{countlabel}}</span>
+    </div>
+    {{#hasitems}}
+        <ul class="vbs-lp-plan-list list-unstyled">
+            {{#items}}
+                <li class="vbs-lp-plan-item">
+                    <span class="vbs-lp-item-name">{{coursename}}</span>
+                    <span class="badge {{statusclass}} vbs-lp-plan-status">{{statuslabel}}</span>
+                    <span class="vbs-lp-item-due">{{duetext}}</span>
+                </li>
+            {{/items}}
+        </ul>
+    {{/hasitems}}
+    {{^hasitems}}
+        <p class="vbs-lp-empty">{{emptytext}}</p>
+    {{/hasitems}}
+{{/hasplan}}
+{{^hasplan}}
+    <p class="vbs-lp-empty">{{emptytext}}</p>
+{{/hasplan}}

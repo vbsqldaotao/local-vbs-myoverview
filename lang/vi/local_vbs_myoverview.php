@@ -48,3 +48,49 @@ $string['lifecycle_completed'] = 'Hoàn thành';
 $string['enrollment_assigned'] = 'Phân công';
 $string['enrollment_pending_approval'] = 'Chờ duyệt';
 $string['enrollment_open_for_registration'] = 'Mở đăng ký';
+
+// F02 — Trang tiến độ học tập (VBS-160).
+$string['progress:pagetitle'] = 'Tiến độ học tập của tôi';
+$string['progress:heading'] = 'Tiến độ học tập của tôi';
+
+// Tiêu đề các section.
+$string['progress:section_plan'] = 'Kế hoạch đào tạo {$a}';
+$string['progress:section_plan_noyear'] = 'Kế hoạch đào tạo';
+$string['progress:section_active'] = 'Khóa đang học';
+$string['progress:section_completed'] = 'Khóa đã hoàn thành';
+$string['progress:section_certificates'] = 'Chứng chỉ đã cấp';
+
+// Section kế hoạch.
+$string['progress:plan_progress'] = '{$a->completed}/{$a->total} mục';
+$string['progress:plan_status_completed'] = 'Hoàn thành';
+$string['progress:plan_status_in_progress'] = 'Đang học';
+$string['progress:plan_status_not_started'] = 'Chưa bắt đầu';
+$string['progress:plan_noitems'] = 'Kế hoạch đào tạo chưa có khóa học nào.';
+
+// Section khóa đang học.
+$string['progress:deadline'] = 'Hạn: {$a}';
+$string['progress:nodeadline'] = 'Hạn: —';
+$string['progress:percent'] = '{$a}%';
+$string['progress:delivery_elearning'] = 'E-learning';
+$string['progress:delivery_classroom'] = 'Classroom';
+$string['progress:delivery_blended'] = 'Blended';
+$string['progress:progressbar_label'] = 'Hoàn thành {$a}%';
+
+// Section khóa đã hoàn thành.
+$string['progress:completedon'] = 'Hoàn thành: {$a}';
+$string['progress:viewcertificate'] = 'Xem chứng chỉ';
+
+// Section chứng chỉ.
+$string['progress:downloadpdf'] = 'Tải xuống PDF';
+$string['progress:downloadpdf_label'] = 'Tải xuống PDF chứng chỉ {$a}';
+
+// Trạng thái rỗng (TC-20).
+$string['progress:empty_plan'] = 'Chưa có kế hoạch đào tạo năm {$a}.';
+$string['progress:empty_plan_noyear'] = 'Chưa có kế hoạch đào tạo.';
+$string['progress:empty_active'] = 'Bạn chưa có khóa học nào đang tiến hành.';
+$string['progress:empty_completed'] = 'Bạn chưa hoàn thành khóa học nào.';
+$string['progress:empty_certificates'] = 'Chưa có chứng chỉ nào được cấp.';
+
+// Loading / lỗi.
+$string['progress:loading'] = 'Đang tải…';
+$string['progress:loaderror'] = 'Không tải được section này. Vui lòng thử lại sau.';
