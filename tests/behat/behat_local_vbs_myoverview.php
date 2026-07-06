@@ -583,6 +583,25 @@ class behat_local_vbs_myoverview extends behat_base {
      * @Then I should see the empty-state catalog banner
      */
     public function i_should_see_the_empty_state_catalog_banner(): void {
+        try {
+            $this->spin(function() {
+                $banner = $this->getSession()->getPage()->find('css', '[data-region="vbs-emptystate-a"]');
+                if ($banner === null) {
+                    throw new ExpectationException('pending', $this->getSession());
+                }
+                return true;
+            });
+        } catch (\Exception $e) {
+            // DIAGNOSTIC (temporary): dump the course region so we can see why the
+            // banner did not inject on this surface.
+            $dom = $this->evaluate_script(
+                'var r = document.querySelector(\'[data-region="courses-view"]\')'
+                . ' || document.querySelector(\'[data-region="myoverview"]\')'
+                . ' || document.getElementById("region-main") || document.body;'
+                . 'return r ? r.outerHTML.substring(0, 2500) : "NO-REGION";'
+            );
+            throw new ExpectationException("EMPTYSTATE-A-MISSING DOM==>{$dom}<==END", $this->getSession());
+        }
         $this->spin(function() {
             $banner = $this->getSession()->getPage()->find('css', '[data-region="vbs-emptystate-a"]');
             if ($banner === null) {
