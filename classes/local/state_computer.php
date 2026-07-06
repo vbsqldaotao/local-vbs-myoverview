@@ -151,4 +151,93 @@ class state_computer {
         // block_myoverview only lists enrolled courses, so this is a defensive default.
         return self::ENROL_ASSIGNED;
     }
+
+    /**
+     * Course ids the learner may self-register for but is not yet enrolled in —
+     * i.e. the `open_for_registration` half (b) of the class list (spec §2, BR-F01-01).
+     *
+     * This realises `enrollment_state: open_for_registration` for the catalog
+     * surface (VBS-134): the block_myoverview scope only lists enrolled courses,
+     * so "open" classes live on /course/index.php instead. A course qualifies when
+     * it is visible, the learner is not already enrolled, and it carries an enabled
+     * `self` enrolment instance whose own gate (`enrol_self::can_self_enrol`) admits
+     * the current user — that gate is Moodle's authoritative eligibility check
+     * (Function #31: new-enrolments flag, capacity, enrol dates, cohort). Password
+     * protection is NOT a disqualifier: the learner can still register with the key,
+     * so the class stays "open".
+     *
+     * Eligibility is evaluated for the current $USER (can_self_enrol is $USER-bound),
+     * so callers must pass the id of the logged-in user (the WS always does).
+     *
+     * @param int $userid learner id (must be the current $USER for eligibility to be meaningful)
+     * @param int|null $now timestamp to evaluate the enrol window against (defaults to time())
+     * @return int[] distinct course ids open for self registration, in course-id order
+     */
+    public function get_open_registration_courseids(int $userid, ?int $now = null): array {
+        global $DB, $CFG;
+        $now = $now ?? time();
+
+        if ($userid <= 0) {
+            return [];
+        }
+
+        // If the self-enrolment plugin is disabled site-wide, no class is open.
+        if (!enrol_is_enabled('self')) {
+            return [];
+        }
+
+        // Candidate self-enrol instances: enabled, in a visible non-site course,
+        // inside the enrol window. The per-instance eligibility gate below does the
+        // rest (capacity, new-enrolments flag, cohort) so this stays a cheap prefilter.
+        $sql = "SELECT e.*
+                  FROM {enrol} e
+                  JOIN {course} c ON c.id = e.courseid
+                 WHERE e.enrol = :self
+                   AND e.status = :enabled
+                   AND c.visible = 1
+                   AND c.id <> :siteid
+                   AND (e.enrolstartdate = 0 OR e.enrolstartdate <= :now1)
+                   AND (e.enrolenddate = 0 OR e.enrolenddate >= :now2)
+              ORDER BY e.courseid ASC";
+        $instances = $DB->get_records_sql($sql, [
+            'self' => 'self',
+            'enabled' => ENROL_INSTANCE_ENABLED,
+            'siteid' => SITEID,
+            'now1' => $now,
+            'now2' => $now,
+        ]);
+        if (!$instances) {
+            return [];
+        }
+
+        // enrol_self_plugin::can_self_enrol lives in the (non PSR-4) plugin lib; load it.
+        require_once($CFG->dirroot . '/enrol/self/lib.php');
+        $selfplugin = enrol_get_plugin('self');
+        if (!$selfplugin) {
+            return [];
+        }
+
+        $open = [];
+        foreach ($instances as $instance) {
+            $courseid = (int)$instance->courseid;
+            if (isset($open[$courseid])) {
+                continue;
+            }
+            $coursecontext = \context_course::instance($courseid, IGNORE_MISSING);
+            if (!$coursecontext) {
+                continue;
+            }
+            // Already enrolled (any method) → this is half (a), not "open" — skip fast.
+            if (is_enrolled($coursecontext, $userid)) {
+                continue;
+            }
+            // Authoritative eligibility gate for the current user (returns true or an
+            // error string). Evaluated against $USER, so meaningful only for the caller.
+            if ($selfplugin->can_self_enrol($instance, false) === true) {
+                $open[$courseid] = $courseid;
+            }
+        }
+
+        return array_values($open);
+    }
 }
