@@ -48,6 +48,26 @@ final class badge_mapper_test extends \advanced_testcase {
         $this->assertStringContainsString('bg-primary', $badges[1]['classes']);
         // Enrollment is an outlined chip.
         $this->assertStringContainsString('border-primary', $badges[2]['classes']);
+        // Each badge carries its semantic data-badge-type anchor in card order.
+        $this->assertEquals(badge_mapper::TYPE_DELIVERY, $badges[0]['type']);
+        $this->assertEquals(badge_mapper::TYPE_LIFECYCLE, $badges[1]['type']);
+        $this->assertEquals(badge_mapper::TYPE_ENROLLMENT, $badges[2]['type']);
+    }
+
+    /**
+     * When the delivery badge is omitted, the surviving badges keep their types.
+     *
+     * @return void
+     */
+    public function test_types_when_delivery_omitted(): void {
+        $badges = badge_mapper::build_badges(
+            null,
+            state_computer::LIFECYCLE_IN_PROGRESS,
+            state_computer::ENROL_OPEN
+        );
+        $this->assertCount(2, $badges);
+        $this->assertEquals(badge_mapper::TYPE_LIFECYCLE, $badges[0]['type']);
+        $this->assertEquals(badge_mapper::TYPE_ENROLLMENT, $badges[1]['type']);
     }
 
     /**
@@ -90,5 +110,6 @@ final class badge_mapper_test extends \advanced_testcase {
         $badge = badge_mapper::delivery_badge('  BLENDED ');
         $this->assertNotNull($badge);
         $this->assertEquals(get_string('delivery_blended', 'local_vbs_myoverview'), $badge['label']);
+        $this->assertEquals(badge_mapper::TYPE_DELIVERY, $badge['type']);
     }
 }
