@@ -1,0 +1,94 @@
+name: Moodle PHPUnit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  phpunit:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: moodle
+          POSTGRES_DB: moodle
+          POSTGRES_PASSWORD: moodle
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
+
+    strategy:
+      fail-fast: false
+      matrix:
+        moodle-branch: ['MOODLE_404_STABLE']
+        php: ['8.1']
+        db: ['pgsql']
+
+    steps:
+      - name: Checkout local-vbs-myoverview
+        uses: actions/checkout@v4
+        with:
+          path: plugin
+
+      # local_vbs_plan provides vbs_plan_year / vbs_plan_item tables required by
+      # build_training_plan() — without it every call returns null in PHPUnit.
+      - name: Checkout local-vbs-plan
+        uses: actions/checkout@v4
+        with:
+          repository: vbsqldaotao/local-vbs-plan
+          token: ${{ secrets.CI_CLONE_TOKEN }}
+          path: extra-plugins/local_vbs_plan
+
+      # mod_customcert provides customcert / customcert_issues tables required by
+      # build_certificates() — without it every call returns null in PHPUnit.
+      - name: Checkout mod-customcert
+        uses: actions/checkout@v4
+        with:
+          repository: vbsqldaotao/mod-customcert
+          token: ${{ secrets.CI_CLONE_TOKEN }}
+          path: extra-plugins/mod_customcert
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pgsql, zip, gd, soap, xmlrpc, intl
+          coverage: none
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Initialise moodle-plugin-ci
+        run: |
+          composer create-project -n --no-dev --prefer-dist moodlehq/moodle-plugin-ci ci ^4
+          echo "$(cd ci && pwd)/bin" >> "$GITHUB_PATH"
+          echo "$(cd ci && pwd)/vendor/bin" >> "$GITHUB_PATH"
+          sudo locale-gen en_AU.UTF-8
+
+      - name: Install Moodle + plugins
+        run: |
+          moodle-plugin-ci install \
+            --plugin ./plugin \
+            --extra-plugins ./extra-plugins \
+            --db-host 127.0.0.1 \
+            --db-user moodle \
+            --db-pass moodle \
+            --db-name moodle \
+            --db-port 5432 \
+            --moodle-branch "${{ matrix.moodle-branch }}" \
+            --db "${{ matrix.db }}"
+
+      - name: PHPUnit
+        run: moodle-plugin-ci phpunit --coverage-text
