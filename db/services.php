@@ -35,4 +35,15 @@ $functions = [
         'capabilities' => '',
         'services'    => [],
     ],
+    'local_vbs_myoverview_open_registration_summary' => [
+        'classname'   => 'local_vbs_myoverview\external\open_registration_summary',
+        'methodname'  => 'execute',
+        'description' => 'Return whether the current user has classes open for self registration '
+            . '(count + catalog URL + per-course register URLs). Read-only; powers Empty State A '
+            . 'and the catalog "Đăng ký ngay" CTA (VBS-134).',
+        'type'        => 'read',
+        'ajax'        => true,
+        'capabilities' => '',
+        'services'    => [],
+    ],
 ];
