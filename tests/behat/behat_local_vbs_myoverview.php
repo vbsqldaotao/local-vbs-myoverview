@@ -649,6 +649,62 @@ class behat_local_vbs_myoverview extends behat_base {
         }
     }
 
+    /**
+     * Assert the block's empty state shows the §5.3 search no-result wording (VBS-147).
+     *
+     * When a search term matches no course, block_myoverview renders the SAME core
+     * "no courses" placeholder it uses for a genuinely zero-course learner. The
+     * theme_vbs/myoverview_emptystate overlay reads the search input at settle time
+     * and swaps that placeholder's paragraph text for `f01_search_noresult`. The swap
+     * is asynchronous (getString promise), so spin() until the localised string
+     * appears in an [data-region="empty-message"] region. The expected text is
+     * resolved via get_string() so the step stays language-agnostic regardless of the
+     * lang forced in the feature Background.
+     *
+     * @Then I should see the course search no-result message
+     */
+    public function i_should_see_the_course_search_no_result_message(): void {
+        $expected = get_string('f01_search_noresult', 'theme_vbs');
+        $this->spin(function() use ($expected) {
+            $regions = $this->getSession()->getPage()->findAll('css',
+                '[data-region="courses-view"] [data-region="empty-message"]');
+            foreach ($regions as $region) {
+                if (str_contains($region->getText(), $expected)) {
+                    return true;
+                }
+            }
+            throw new ExpectationException(
+                "Search no-result message '$expected' not shown in the empty-message region yet.",
+                $this->getSession()
+            );
+        });
+    }
+
+    /**
+     * Assert the §5.3 search no-result wording is NOT shown (VBS-147).
+     *
+     * Used when the search matches at least one course (cards render, no empty
+     * state) or when the zero-course state must keep its stock wording rather than
+     * the no-result message. Waits for pending JS so the overlay has had its chance
+     * to swap, then asserts no empty-message region carries `f01_search_noresult`.
+     *
+     * @Then I should not see the course search no-result message
+     */
+    public function i_should_not_see_the_course_search_no_result_message(): void {
+        $this->wait_for_pending_js();
+        $expected = get_string('f01_search_noresult', 'theme_vbs');
+        $regions = $this->getSession()->getPage()->findAll('css',
+            '[data-region="courses-view"] [data-region="empty-message"]');
+        foreach ($regions as $region) {
+            if (str_contains($region->getText(), $expected)) {
+                throw new ExpectationException(
+                    "Search no-result message '$expected' should NOT be shown here but it was.",
+                    $this->getSession()
+                );
+            }
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────
     // Private helpers
     // ─────────────────────────────────────────────────────────────
