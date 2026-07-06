@@ -46,6 +46,13 @@ abstract class ws_testcase extends \advanced_testcase {
      * @return array the cleaned response payload (result['data'])
      */
     protected function call_ws(string $function, array $params): array {
+        // The AJAX web-service dispatch path guards ajax-enabled functions with a
+        // sesskey (required_param + confirm_sesskey), exactly as a browser XHR would
+        // carry one. Seed a valid sesskey for the current user so the simulation runs
+        // the real guarded path instead of erroring out on a missing parameter.
+        $_POST['sesskey'] = sesskey();
+        $_GET['sesskey'] = $_POST['sesskey'];
+
         $result = \core_external\external_api::call_external_function($function, $params, false);
         if (!empty($result['error'])) {
             $message = isset($result['exception']->message) ? $result['exception']->message : 'WS call failed';
@@ -70,8 +77,8 @@ abstract class ws_testcase extends \advanced_testcase {
 
     /**
      * Set the delivery_mode value for a course through the customfield API
-     * (handler form-save) — never a direct table insert — so the stored
-     * intvalue matches what the UI would write.
+     * (a data_controller save) — never a direct table insert — so the stored
+     * intvalue matches what a real save would write.
      *
      * @param int $courseid course instance id
      * @param int $fieldid customfield_field id for delivery_mode
@@ -81,22 +88,25 @@ abstract class ws_testcase extends \advanced_testcase {
     protected function set_delivery_mode(int $courseid, int $fieldid, string $value): void {
         $field = \core_customfield\field_controller::create($fieldid);
 
-        // customfield_select stores the 1-based option index in intvalue; the form
-        // element carries that same index, so resolve $value → index before saving.
+        // customfield_select stores the 1-based option index in intvalue (0 = unset),
+        // so resolve $value → index before saving through the data controller.
         $options = preg_split('/\r?\n/', trim((string)$field->get_configdata_property('options')));
         $options = array_map('trim', $options ?: []);
         $index = array_search($value, $options, true);
         if ($index === false) {
             throw new \coding_exception("Unknown delivery_mode option: {$value}");
         }
+        $optionindex = $index + 1;
 
-        $handler = \core_course\customfield\course_handler::create();
-        $formfield = 'customfield_' . customfield_installer::FIELD_SHORTNAME;
-        $instance = (object)[
-            'id' => $courseid,
-            $formfield => $index + 1,
-        ];
-        $handler->instance_form_save_data($instance);
+        $data = \core_customfield\data_controller::create(0, null, $field);
+        $data->set('instanceid', $courseid);
+        $data->set('contextid', \context_course::instance($courseid)->id);
+        // For select the datafield is intvalue; keep the text `value` column in sync
+        // (it is NOT NULL) so the row mirrors what the customfield API persists.
+        // Set intvalue last so it wins if the controller re-derives it from `value`.
+        $data->set('value', (string)$optionindex);
+        $data->set('intvalue', $optionindex);
+        $data->save();
     }
 
     /**
@@ -121,7 +131,9 @@ abstract class ws_testcase extends \advanced_testcase {
             'decvalue'       => null,
             'shortcharvalue' => null,
             'charvalue'      => null,
-            'value'          => null,
+            // The malformed state under test is the NULL intvalue; the `value` text
+            // column is NOT NULL, so it carries an empty string (as a select would).
+            'value'          => '',
             'valueformat'    => 0,
             'timecreated'    => time(),
             'timemodified'   => time(),
