@@ -48,3 +48,49 @@ $string['lifecycle_completed'] = 'Completed';
 $string['enrollment_assigned'] = 'Assigned';
 $string['enrollment_pending_approval'] = 'Pending approval';
 $string['enrollment_open_for_registration'] = 'Open for registration';
+
+// F02 — Learning progress page (VBS-160).
+$string['progress:pagetitle'] = 'My learning progress';
+$string['progress:heading'] = 'My learning progress';
+
+// Section titles.
+$string['progress:section_plan'] = 'Training plan {$a}';
+$string['progress:section_plan_noyear'] = 'Training plan';
+$string['progress:section_active'] = 'Courses in progress';
+$string['progress:section_completed'] = 'Completed courses';
+$string['progress:section_certificates'] = 'Issued certificates';
+
+// Plan section.
+$string['progress:plan_progress'] = '{$a->completed}/{$a->total} items';
+$string['progress:plan_status_completed'] = 'Completed';
+$string['progress:plan_status_in_progress'] = 'In progress';
+$string['progress:plan_status_not_started'] = 'Not started';
+$string['progress:plan_noitems'] = 'The training plan has no courses yet.';
+
+// Active courses section.
+$string['progress:deadline'] = 'Due: {$a}';
+$string['progress:nodeadline'] = 'Due: —';
+$string['progress:percent'] = '{$a}%';
+$string['progress:delivery_elearning'] = 'E-learning';
+$string['progress:delivery_classroom'] = 'Classroom';
+$string['progress:delivery_blended'] = 'Blended';
+$string['progress:progressbar_label'] = 'Completion {$a}%';
+
+// Completed courses section.
+$string['progress:completedon'] = 'Completed: {$a}';
+$string['progress:viewcertificate'] = 'View certificate';
+
+// Certificates section.
+$string['progress:downloadpdf'] = 'Download PDF';
+$string['progress:downloadpdf_label'] = 'Download PDF of certificate {$a}';
+
+// Empty states (TC-20).
+$string['progress:empty_plan'] = 'No training plan for {$a}.';
+$string['progress:empty_plan_noyear'] = 'No training plan yet.';
+$string['progress:empty_active'] = 'You have no courses in progress.';
+$string['progress:empty_completed'] = 'You have not completed any courses yet.';
+$string['progress:empty_certificates'] = 'No certificates have been issued yet.';
+
+// Loading / error.
+$string['progress:loading'] = 'Loading…';
+$string['progress:loaderror'] = 'Could not load this section. Please try again later.';

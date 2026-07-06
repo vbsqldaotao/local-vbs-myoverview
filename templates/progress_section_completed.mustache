@@ -1,0 +1,53 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_vbs_myoverview/progress_section_completed
+
+    "Completed courses" section body. "View certificate" link only appears when
+    the completed course has an issued certificate (hascert).
+
+    Example context (json):
+    {
+        "hasany": true,
+        "courses": [
+            {"coursename": "Occupational safety", "courseurl": "https://lms/course/view.php?id=5",
+             "completedtext": "Completed: 14/03/2024", "hascert": true,
+             "cert_url": "https://lms/mod/customcert/view.php?id=3", "viewcertlabel": "View certificate"}
+        ],
+        "emptytext": "You have not completed any courses yet."
+    }
+}}
+{{#hasany}}
+    <ul class="vbs-lp-course-list list-unstyled">
+        {{#courses}}
+            <li class="vbs-lp-course vbs-lp-course-done">
+                <a href="{{courseurl}}" class="vbs-lp-course-name">{{coursename}}</a>
+                <div class="vbs-lp-course-meta">
+                    <span class="vbs-lp-completed-on">{{completedtext}}</span>
+                    {{#hascert}}
+                        <a href="{{cert_url}}" class="btn btn-outline-primary btn-sm vbs-lp-viewcert">
+                            {{viewcertlabel}}
+                        </a>
+                    {{/hascert}}
+                </div>
+            </li>
+        {{/courses}}
+    </ul>
+{{/hasany}}
+{{^hasany}}
+    <p class="vbs-lp-empty">{{emptytext}}</p>
+{{/hasany}}

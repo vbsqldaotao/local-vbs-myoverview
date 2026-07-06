@@ -52,6 +52,34 @@ versions.
 - Enrollment is only `assigned` / `pending_approval` at pilot (block_myoverview
   lists enrolled courses only).
 
+## F02 — Learning progress page (VBS-160)
+
+A standalone learner page at **`/local/vbs_myoverview/progress.php`** that shows,
+on one screen: training plan, courses in progress, completed courses and issued
+certificates. It renders a shell of four sections (each with its own skeleton
+loader) and hands off to the `local_vbs_myoverview/progress` AMD module, which
+calls the WS **`local_vbs_myoverview_get_learning_progress`** (owned by the
+backend, VBS-159) and hydrates each section independently.
+
+| File | Responsibility |
+|---|---|
+| `progress.php` | Page: `require_login`, renders the shell, passes `{userid, mock, year, timezone}` to the AMD module. |
+| `templates/progress_page.mustache` | Shell — four `[data-region="section"]` blocks, each showing `progress_skeleton` until hydrated. |
+| `templates/progress_section_*.mustache` | Section bodies (plan / active / completed / certificates), rendered client-side with pre-resolved labels. |
+| `amd/src/progress.js` | Fetches the WS (or mock), formats deadlines dd/mm/yyyy in the user's timezone, maps delivery/status labels, streams cert PDF downloads via a hidden iframe (no navigation). |
+| `styles.css` | Layout, slim progress bars and the skeleton shimmer (honours `prefers-reduced-motion`). |
+
+**Mock mode:** append `?vbsmock=1` to develop the FE end-to-end before the
+backend WS lands — the module then renders a bundled payload that mirrors the
+VBS-159 contract (null deadline, 0% progress, null-due plan item, completed
+course without a certificate). Drop the param to switch to the real WS.
+
+Rebuild the AMD after editing `amd/src/progress.js`:
+
+```
+npx grunt amd --root=local/vbs_myoverview
+```
+
 ## Tests
 
 `tests/` — `state_computer`, `badge_mapper`, `enrich_courses`. Run with:

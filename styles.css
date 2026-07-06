@@ -1,0 +1,180 @@
+/* F02 — Learning progress page (local_vbs_myoverview, VBS-160).
+   Colours use Bootstrap/theme variables via utility classes in the templates;
+   this sheet only handles layout, the skeleton shimmer and progress sizing. */
+
+.vbs-lp {
+    max-width: 960px;
+}
+
+.vbs-lp-section {
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.vbs-lp-section:last-child {
+    border-bottom: 0;
+}
+
+.vbs-lp-section-title {
+    margin-bottom: 1rem;
+    font-size: 1.15rem;
+}
+
+/* Plan summary. */
+.vbs-lp-plan-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.vbs-lp-plan-summary .vbs-lp-progress {
+    flex: 1 1 auto;
+    max-width: 320px;
+}
+
+.vbs-lp-plan-count {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.vbs-lp-plan-list {
+    margin: 0;
+}
+
+.vbs-lp-plan-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 0;
+}
+
+.vbs-lp-item-name {
+    flex: 1 1 auto;
+}
+
+.vbs-lp-item-due {
+    color: #6c757d;
+    white-space: nowrap;
+}
+
+/* Course rows (active + completed). */
+.vbs-lp-course-list {
+    margin: 0;
+}
+
+.vbs-lp-course {
+    padding: 0.6rem 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.vbs-lp-course:last-child {
+    border-bottom: 0;
+}
+
+.vbs-lp-course-name {
+    display: inline-block;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+}
+
+.vbs-lp-course-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.vbs-lp-course-meta .vbs-lp-progress {
+    flex: 0 0 160px;
+    max-width: 160px;
+}
+
+.vbs-lp-percent {
+    font-weight: 600;
+    min-width: 3ch;
+}
+
+.vbs-lp-deadline,
+.vbs-lp-completed-on {
+    color: #6c757d;
+    white-space: nowrap;
+}
+
+/* Certificates. */
+.vbs-lp-cert {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.vbs-lp-cert:last-child {
+    border-bottom: 0;
+}
+
+.vbs-lp-cert-name {
+    flex: 1 1 auto;
+}
+
+/* Progress bar height (matches Bootstrap .progress but slimmer). */
+.vbs-lp-progress {
+    height: 0.6rem;
+    margin: 0;
+}
+
+/* Empty states. */
+.vbs-lp-empty {
+    margin: 0;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Skeleton loader (TC-19). */
+.vbs-lp-skeleton {
+    padding: 0.25rem 0;
+}
+
+.vbs-lp-skel-row {
+    height: 0.9rem;
+    margin-bottom: 0.6rem;
+    border-radius: 0.25rem;
+    background: linear-gradient(90deg, #e9ecef 25%, #f4f6f8 37%, #e9ecef 63%);
+    background-size: 400% 100%;
+    animation: vbs-lp-shimmer 1.4s ease infinite;
+}
+
+.vbs-lp-skel-lg {
+    width: 60%;
+    height: 1.1rem;
+}
+
+.vbs-lp-skel-sm {
+    width: 40%;
+}
+
+@keyframes vbs-lp-shimmer {
+    0% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0 50%;
+    }
+}
+
+/* Respect reduced-motion preferences. */
+@media (prefers-reduced-motion: reduce) {
+    .vbs-lp-skel-row {
+        animation: none;
+    }
+}
+
+@media (max-width: 576px) {
+    .vbs-lp-course-meta .vbs-lp-progress {
+        flex-basis: 100%;
+        max-width: none;
+    }
+}
