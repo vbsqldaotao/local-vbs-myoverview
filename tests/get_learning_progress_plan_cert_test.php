@@ -354,6 +354,13 @@ final class get_learning_progress_plan_cert_test extends \advanced_testcase {
         $this->assertNotEmpty($first['coursename']);
         $this->assertStringContainsString('/mod/customcert/view.php', $first['download_url']);
         $this->assertStringContainsString('downloadown=1', $first['download_url']);
+        // Regression trap for the ci.id-vs-cert.id bug (fix 7b216dd): the view.php
+        // `id` param is the course-MODULE id resolved from the customcert INSTANCE id.
+        // Binding to the real cmid catches a regression that passes the wrong id to
+        // customcert_cm() even on a dev DB where a wrong-but-valid cm still resolves.
+        // Note: assert against $newercert->cmid (course module id) — NOT $newercert->id
+        // (the customcert instance id), which is not what appears in the URL.
+        $this->assertStringContainsString('id=' . $newercert->cmid, $first['download_url']);
     }
 
     /**
