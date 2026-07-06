@@ -25,7 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_vbs_myoverview';
-$plugin->version   = 2026070604;
+$plugin->version   = 2026070605;
 $plugin->requires  = 2024042200; // Moodle 4.4.
 $plugin->maturity  = MATURITY_ALPHA;
 $plugin->release   = '0.2.0';
