@@ -106,7 +106,10 @@ const buildPlanContext = async(plan, config) => {
 
     const total = parseInt(plan.total_items, 10) || 0;
     const completed = parseInt(plan.completed_items, 10) || 0;
-    const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+    // Clamp to 0..100: BE PARAM_INT sanitizes but does not cap, and BR-F01-02
+    // allows completed > total on edge cases — an over-100 width overflows the
+    // bar and yields an invalid aria-valuenow against aria-valuemax="100".
+    const percent = total > 0 ? Math.max(0, Math.min(100, Math.round((completed / total) * 100))) : 0;
 
     // Defensive sort: duedate ASC, nulls last (BE already sorts, but never trust it).
     const rawItems = (plan.items || []).slice().sort((a, b) => {
@@ -166,7 +169,7 @@ const buildActiveContext = async(courses, config) => {
     const noDeadline = await str('progress:nodeadline');
 
     const rendered = await Promise.all(list.map(async(course) => {
-        const percent = parseInt(course.completion_percent, 10) || 0;
+        const percent = Math.max(0, Math.min(100, parseInt(course.completion_percent, 10) || 0));
         const due = formatDate(course.deadline, config.timezone);
         const deliverykey = DELIVERY_KEY[course.delivery_mode];
         return {
@@ -280,6 +283,11 @@ const renderSection = async(section, template, contextPromise) => {
  * @param {string} url
  */
 const streamDownload = (url) => {
+    // Defensively guarantee downloadown=1 — the iframe only downloads (rather
+    // than silently rendering the customcert view page) when the response
+    // carries Content-Disposition: attachment, which customcert gates on this
+    // param. If a proxy or hand-built URL drops it, the click would look broken.
+    const src = url.includes('downloadown=') ? url : url + (url.includes('?') ? '&' : '?') + 'downloadown=1';
     let iframe = document.querySelector('iframe[data-region="vbs-lp-download"]');
     if (!iframe) {
         iframe = document.createElement('iframe');
@@ -287,7 +295,7 @@ const streamDownload = (url) => {
         iframe.style.display = 'none';
         document.body.appendChild(iframe);
     }
-    iframe.src = url;
+    iframe.src = src;
 };
 
 /**
