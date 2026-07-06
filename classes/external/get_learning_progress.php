@@ -92,16 +92,29 @@ class get_learning_progress extends external_api {
 
         $warnings = [];
 
-        return [
+        // Build the plan first so any deleted-course warnings are collected before
+        // the warnings key is assembled.
+        $trainingplan = self::build_training_plan($userid, $warnings);
+
+        $result = [
             'userid' => (int)$userid,
             'fullname' => fullname($targetuser),
             'generated_at' => time(),
             'active_courses' => self::build_active_courses($userid),
             'completed_courses' => self::build_completed_courses($userid),
-            'training_plan' => self::build_training_plan($userid, $warnings),
             'certificates' => self::build_certificates($userid),
             'warnings' => $warnings,
         ];
+
+        // training_plan is a VALUE_OPTIONAL single_structure: Moodle's
+        // clean_returnvalue rejects a null value ("Only arrays/objects accepted"),
+        // so the key must be OMITTED entirely when the learner has no plan — not
+        // set to null.
+        if ($trainingplan !== null) {
+            $result['training_plan'] = $trainingplan;
+        }
+
+        return $result;
     }
 
     /**
