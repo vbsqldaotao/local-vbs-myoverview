@@ -121,10 +121,13 @@ final class enrich_courses_ws_test extends ws_testcase {
     }
 
     /**
-     * TC-WS-04 (primary regression guard): a delivery_mode data row with a NULL
-     * intvalue — the malformed state that broke the F01 pilot before fa14c6a —
-     * must NOT throw. The card degrades gracefully: no delivery badge, just the
-     * lifecycle + enrollment pair.
+     * TC-WS-04 (graceful-degradation contract guard): a delivery_mode data row with
+     * a NULL intvalue — a malformed customfield_data state (produced pre-fix by the
+     * Behat save step that set 'value' without 'intvalue', commit 7e4984c; the source
+     * bug was in that step, NOT in enrich_courses::get_delivery_mode(), which has always
+     * handled the null/empty export path) — must NOT throw over the WS path. This locks
+     * in the graceful-degradation contract: the card drops the delivery badge and keeps
+     * just the lifecycle + enrollment pair.
      *
      * @return void
      */

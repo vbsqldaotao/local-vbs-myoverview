@@ -100,10 +100,12 @@ abstract class ws_testcase extends \advanced_testcase {
     }
 
     /**
-     * Regression guard helper: write a delivery_mode data row with a NULL intvalue
-     * straight into customfield_data, reproducing the malformed state that broke the
-     * F01 pilot before commit fa14c6a. Direct insert is intentional here — the whole
-     * point is to smuggle in a value the customfield API would never produce.
+     * Graceful-degradation helper: write a delivery_mode data row with a NULL intvalue
+     * straight into customfield_data, reproducing the malformed state a save path could
+     * leave behind (e.g. the pre-fix Behat step that set 'value' without 'intvalue',
+     * commit 7e4984c). Direct insert is intentional here — the whole point is to smuggle
+     * in a value the customfield API would never produce, so the WS read path's null
+     * handling is exercised.
      *
      * @param int $courseid course instance id
      * @param int $fieldid customfield_field id for delivery_mode
