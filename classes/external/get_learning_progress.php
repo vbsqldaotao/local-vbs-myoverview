@@ -288,7 +288,7 @@ class get_learning_progress extends external_api {
             return [];
         }
 
-        $sql = "SELECT ci.id AS certid, cert.name AS certname, cert.course AS courseid,
+        $sql = "SELECT cert.id AS certid, cert.name AS certname, cert.course AS courseid,
                        ci.timecreated, ci.code
                   FROM {customcert_issues} ci
                   JOIN {customcert} cert ON cert.id = ci.customcertid
