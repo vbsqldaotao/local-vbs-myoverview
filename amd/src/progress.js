@@ -72,6 +72,17 @@ const PLAN_STATUS_CLASS = {
 const str = (key, param) => getString(key, COMPONENT, param);
 
 /**
+ * Clamp a progress percentage into the valid 0..100 range. BE PARAM_INT
+ * sanitizes but does not cap, and BR-F01-02 allows completed > total on
+ * edge cases — an unclamped value overflows the bar width and produces an
+ * invalid aria-valuenow > aria-valuemax (accessibility violation).
+ *
+ * @param {number} value
+ * @return {number}
+ */
+const clampPercent = (value) => Math.max(0, Math.min(100, value));
+
+/**
  * Format a UNIX timestamp as dd/mm/yyyy in the user's timezone (AC-01).
  *
  * @param {number} timestamp seconds since epoch (0/null → null)
@@ -106,7 +117,7 @@ const buildPlanContext = async(plan, config) => {
 
     const total = parseInt(plan.total_items, 10) || 0;
     const completed = parseInt(plan.completed_items, 10) || 0;
-    const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const percent = clampPercent(total > 0 ? Math.round((completed / total) * 100) : 0);
 
     // Defensive sort: duedate ASC, nulls last (BE already sorts, but never trust it).
     const rawItems = (plan.items || []).slice().sort((a, b) => {
@@ -166,7 +177,7 @@ const buildActiveContext = async(courses, config) => {
     const noDeadline = await str('progress:nodeadline');
 
     const rendered = await Promise.all(list.map(async(course) => {
-        const percent = parseInt(course.completion_percent, 10) || 0;
+        const percent = clampPercent(parseInt(course.completion_percent, 10) || 0);
         const due = formatDate(course.deadline, config.timezone);
         const deliverykey = DELIVERY_KEY[course.delivery_mode];
         return {
@@ -287,7 +298,13 @@ const streamDownload = (url) => {
         iframe.style.display = 'none';
         document.body.appendChild(iframe);
     }
-    iframe.src = url;
+    // Defensively guarantee downloadown=1 so customcert forces an attachment
+    // disposition. Without it the iframe silently loads the view page and the
+    // click looks broken (no download, no error) — see arch-review warning 2.
+    const downloadUrl = url.includes('downloadown=')
+        ? url
+        : url + (url.includes('?') ? '&' : '?') + 'downloadown=1';
+    iframe.src = downloadUrl;
 };
 
 /**
