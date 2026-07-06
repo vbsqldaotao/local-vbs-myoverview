@@ -81,7 +81,8 @@ final class get_learning_progress_test extends \advanced_testcase {
         $this->assertGreaterThan(0, $result['generated_at']);
         $this->assertSame([], $result['active_courses']);
         $this->assertSame([], $result['completed_courses']);
-        $this->assertNull($result['training_plan']);
+        // No plan → the VALUE_OPTIONAL training_plan key is omitted (not null).
+        $this->assertArrayNotHasKey('training_plan', $result);
         $this->assertSame([], $result['certificates']);
         $this->assertSame([], $result['warnings']);
     }
