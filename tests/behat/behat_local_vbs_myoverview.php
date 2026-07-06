@@ -120,6 +120,65 @@ class behat_local_vbs_myoverview extends behat_base {
         $controller->save();
     }
 
+    /**
+     * Open a course for self registration (the `open_for_registration` half (b)).
+     *
+     * Makes the named course qualify for state_computer::get_open_registration_courseids():
+     * the site-wide `self` enrol plugin is enabled, and the course carries an enabled
+     * `self` enrolment instance with new enrolments allowed, no capacity cap, no cohort
+     * restriction and an open (unbounded) enrol window. That is exactly the gate
+     * enrol_self_plugin::can_self_enrol() checks, so a learner who is not yet enrolled
+     * shows up as "open" on the catalog CTA / Empty State A overlays.
+     *
+     * Self-contained (no reliance on the course's auto-created instance state) so it
+     * works on a freshly-reset Behat DB, mirroring the_course_has_delivery_mode().
+     *
+     * @Given the course :shortname is open for self enrolment
+     *
+     * @param string $shortname course shortname
+     */
+    public function the_course_is_open_for_self_enrolment(string $shortname): void {
+        global $DB, $CFG;
+        require_once($CFG->dirroot . '/enrol/self/lib.php');
+
+        // Ensure the self enrolment plugin is enabled site-wide.
+        if (!enrol_is_enabled('self')) {
+            \core\plugininfo\enrol::enable_plugin('self', 1);
+        }
+
+        $course = $DB->get_record('course', ['shortname' => $shortname], '*', MUST_EXIST);
+        $plugin = enrol_get_plugin('self');
+
+        // Reuse the course's self instance if one exists (courses get a disabled one by
+        // default); otherwise add a fresh enabled instance.
+        $instance = null;
+        foreach (enrol_get_instances($course->id, false) as $inst) {
+            if ($inst->enrol === 'self') {
+                $instance = $inst;
+                break;
+            }
+        }
+        if ($instance === null) {
+            $instanceid = $plugin->add_instance($course, [
+                'status'     => ENROL_INSTANCE_ENABLED,
+                'customint6' => 1, // Allow new enrolments.
+            ]);
+            $instance = $DB->get_record('enrol', ['id' => $instanceid], '*', MUST_EXIST);
+        }
+
+        // Enable the instance and clear every gate can_self_enrol() evaluates.
+        $plugin->update_status($instance, ENROL_INSTANCE_ENABLED);
+        $DB->update_record('enrol', (object)[
+            'id'             => $instance->id,
+            'customint6'     => 1, // New enrolments allowed.
+            'customint3'     => 0, // Max enrolled: unlimited.
+            'customint5'     => 0, // No cohort restriction.
+            'enrolstartdate' => 0,
+            'enrolenddate'   => 0,
+            'password'       => '', // Password does not block eligibility, but keep it open.
+        ]);
+    }
+
     // ─────────────────────────────────────────────────────────────
     // Navigation steps
     // ─────────────────────────────────────────────────────────────
@@ -133,6 +192,26 @@ class behat_local_vbs_myoverview extends behat_base {
         $url = new \moodle_url('/my/courses.php');
         $this->getSession()->visit($this->locate_path($url->out_as_local_url(false)));
         // W1 fix: use parent's wait_for_pending_js() — do not override.
+        $this->wait_for_pending_js();
+    }
+
+    /**
+     * Navigate to the course catalog category page that lists the named course.
+     *
+     * Goes straight to /course/index.php?categoryid=<the course's category> so the
+     * course boxes render server-side under the `coursecategory` layout (where the
+     * theme_vbs/catalog_register overlay is loaded), avoiding the lazy category-tree
+     * AJAX expansion of the catalog root.
+     *
+     * @When I am on the course catalog page listing :shortname
+     *
+     * @param string $shortname course shortname
+     */
+    public function i_am_on_the_course_catalog_page_listing(string $shortname): void {
+        global $DB;
+        $course = $DB->get_record('course', ['shortname' => $shortname], 'id, category', MUST_EXIST);
+        $url = new \moodle_url('/course/index.php', ['categoryid' => $course->category]);
+        $this->getSession()->visit($this->locate_path($url->out_as_local_url(false)));
         $this->wait_for_pending_js();
     }
 
@@ -434,6 +513,122 @@ class behat_local_vbs_myoverview extends behat_base {
     }
 
     // ─────────────────────────────────────────────────────────────
+    // Assertion steps — F01 half (b): catalog CTA + Empty State A
+    // (theme_vbs overlays; require theme_vbs active + this plugin installed)
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Assert the "Đăng ký ngay" register CTA appears on the named catalog course box.
+     *
+     * The CTA is injected asynchronously by theme_vbs/catalog_register.js after the
+     * open_registration_summary web service resolves, so spin() until it arrives. The
+     * button's href must be a server-built /enrol/index.php URL (arch-review W2 — no
+     * client-side URL construction, no javascript: scheme).
+     *
+     * @Then the catalog course box for :coursename shows a register button
+     *
+     * @param string $coursename visible course fullname
+     */
+    public function the_catalog_course_box_shows_a_register_button(string $coursename): void {
+        $this->spin(function() use ($coursename) {
+            $box = $this->find_catalog_course_box($coursename);
+            $cta = $box->find('css', '[data-region="vbs-catalog-cta"] a');
+            if ($cta === null) {
+                throw new ExpectationException(
+                    "Catalog course box for '$coursename' has no register CTA yet.",
+                    $this->getSession()
+                );
+            }
+            $href = (string)$cta->getAttribute('href');
+            if (strpos($href, '/enrol/index.php') === false) {
+                throw new ExpectationException(
+                    "Register CTA for '$coursename' should link to /enrol/index.php; got '$href'.",
+                    $this->getSession()
+                );
+            }
+            return true;
+        });
+    }
+
+    /**
+     * Assert NO register CTA appears on the named catalog course box.
+     *
+     * Used for a course that is not open for the learner (e.g. already enrolled or no
+     * self enrolment): the catalog must stay a plain listing for it. Waits for pending
+     * JS first so the overlay has had its chance to (not) inject.
+     *
+     * @Then the catalog course box for :coursename does not show a register button
+     *
+     * @param string $coursename visible course fullname
+     */
+    public function the_catalog_course_box_does_not_show_a_register_button(string $coursename): void {
+        $this->wait_for_pending_js();
+        $box = $this->find_catalog_course_box($coursename);
+        $cta = $box->find('css', '[data-region="vbs-catalog-cta"]');
+        if ($cta !== null) {
+            throw new ExpectationException(
+                "Catalog course box for '$coursename' should NOT show a register CTA but one was found.",
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * Assert the Empty State A banner (catalog link) replaces the core "no courses" state.
+     *
+     * theme_vbs/myoverview_emptystate.js injects the banner asynchronously once the
+     * Course overview block settles on its empty placeholder and a class is open for
+     * registration; spin() until it appears and check its link targets the catalog.
+     *
+     * @Then I should see the empty-state catalog banner
+     */
+    public function i_should_see_the_empty_state_catalog_banner(): void {
+        $this->spin(function() {
+            $banner = $this->getSession()->getPage()->find('css', '[data-region="vbs-emptystate-a"]');
+            if ($banner === null) {
+                throw new ExpectationException(
+                    'Empty State A banner [data-region="vbs-emptystate-a"] not found yet.',
+                    $this->getSession()
+                );
+            }
+            $link = $banner->find('css', 'a[href]');
+            if ($link === null || trim((string)$link->getAttribute('href')) === '') {
+                throw new ExpectationException(
+                    'Empty State A banner is present but has no catalog link.',
+                    $this->getSession()
+                );
+            }
+            $href = (string)$link->getAttribute('href');
+            if (strpos($href, '/course/index.php') === false) {
+                throw new ExpectationException(
+                    "Empty State A link should target the course catalog; got '$href'.",
+                    $this->getSession()
+                );
+            }
+            return true;
+        });
+    }
+
+    /**
+     * Assert the Empty State A banner is NOT shown (core empty state left untouched).
+     *
+     * Used when no class is open for registration: the block must keep its stock
+     * "no courses" placeholder. Waits for pending JS so the overlay has had its chance.
+     *
+     * @Then I should not see the empty-state catalog banner
+     */
+    public function i_should_not_see_the_empty_state_catalog_banner(): void {
+        $this->wait_for_pending_js();
+        $banner = $this->getSession()->getPage()->find('css', '[data-region="vbs-emptystate-a"]');
+        if ($banner !== null) {
+            throw new ExpectationException(
+                'Empty State A banner should NOT be shown when no class is open for registration.',
+                $this->getSession()
+            );
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // Private helpers
     // ─────────────────────────────────────────────────────────────
 
@@ -468,6 +663,33 @@ class behat_local_vbs_myoverview extends behat_base {
         } catch (ElementNotFoundException $e) {
             throw new ExpectationException(
                 "No course card found for '$coursename'. Is the course visible on the current page?",
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * Find the catalog course box (/course/index.php) for a course by its fullname.
+     *
+     * core_course_renderer::coursecat_coursebox() renders each course inline as
+     *   <div class="coursebox ..." data-courseid="{id}">
+     * with the course fullname in a `.coursename` link. Matches the box whose
+     * `.coursename` descendant text contains the fullname.
+     *
+     * @param string $coursename visible course fullname
+     * @return \Behat\Mink\Element\NodeElement
+     * @throws ExpectationException
+     */
+    protected function find_catalog_course_box(string $coursename): \Behat\Mink\Element\NodeElement {
+        $escaped = \behat_context_helper::escape($coursename);
+        $xpath = "//div[@data-courseid and contains(concat(' ', normalize-space(@class), ' '), ' coursebox ')]"
+               . "[.//*[contains(concat(' ', normalize-space(@class), ' '), ' coursename ')]"
+               . "[contains(normalize-space(.), {$escaped})]]";
+        try {
+            return $this->find('xpath', $xpath);
+        } catch (ElementNotFoundException $e) {
+            throw new ExpectationException(
+                "No catalog course box found for '$coursename'. Is the course listed on this category page?",
                 $this->getSession()
             );
         }
