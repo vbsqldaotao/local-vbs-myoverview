@@ -1,0 +1,249 @@
+name: CI — local-vbs-myoverview
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── PHP lint ───────────────────────────────────────────────────────────────
+  php-lint:
+    name: PHP Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: none
+          coverage: none
+
+      - name: Lint PHP files
+        run: |
+          set -e
+          FAIL=0
+          while IFS= read -r -d '' file; do
+            php -l "$file" >/dev/null || FAIL=1
+          done < <(find classes db -name "*.php" -print0)
+          php -l version.php >/dev/null || FAIL=1
+          [ "$FAIL" -eq 0 ] && echo "PHP lint passed" || { echo "PHP lint FAILED"; exit 1; }
+
+  # ── PHPUnit on Moodle 4.4 ──────────────────────────────────────────────────
+  # moodlehq/moodle-plugin-ci ^4 depends on moodlehq/moodle-local_ci which is
+  # not on Packagist. We set up Moodle directly to avoid that broken dependency.
+  phpunit:
+    name: PHPUnit (Moodle 4.4 / PHP 8.1)
+    runs-on: ubuntu-22.04
+
+    env:
+      MOODLE_ROOT: /opt/moodle
+      MOODLE_DATA: /opt/moodledata
+      MOODLE_PHPU_DATA: /opt/phpu_moodledata
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: moodle
+          POSTGRES_PASSWORD: moodle
+          POSTGRES_DB: moodle
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: plugin
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: pgsql, zip, gd, curl, soap, intl, mbstring, xml
+          ini-values: max_input_vars=5000
+          coverage: none
+
+      - name: Clone Moodle 4.4 (shallow)
+        run: |
+          git clone --depth=1 --branch MOODLE_404_STABLE \
+            https://github.com/moodle/moodle.git $MOODLE_ROOT
+
+      - name: Place plugin under local/vbs_myoverview
+        run: cp -r plugin $MOODLE_ROOT/local/vbs_myoverview
+
+      - name: Composer install (Moodle vendor + PHPUnit)
+        run: |
+          cd $MOODLE_ROOT
+          composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Write Moodle config.php
+        run: |
+          mkdir -p $MOODLE_DATA $MOODLE_PHPU_DATA
+          {
+            echo "<?php"
+            echo "global \$CFG; \$CFG = new stdClass();"
+            echo "\$CFG->dbtype    = 'pgsql';"
+            echo "\$CFG->dblibrary = 'native';"
+            echo "\$CFG->dbhost    = '127.0.0.1';"
+            echo "\$CFG->dbname    = 'moodle';"
+            echo "\$CFG->dbuser    = 'moodle';"
+            echo "\$CFG->dbpass    = 'moodle';"
+            echo "\$CFG->prefix    = 'mdl_';"
+            echo "\$CFG->dboptions = ['dbport' => '5432'];"
+            echo "\$CFG->wwwroot   = 'http://localhost';"
+            echo "\$CFG->dataroot  = '$MOODLE_DATA';"
+            echo "\$CFG->admin     = 'admin';"
+            echo "\$CFG->directorypermissions = 0777;"
+            echo "\$CFG->phpunit_prefix   = 'phpu_';"
+            echo "\$CFG->phpunit_dataroot = '$MOODLE_PHPU_DATA';"
+            echo "require_once(__DIR__ . '/lib/setup.php');"
+          } > $MOODLE_ROOT/config.php
+
+      - name: Install en_AU.UTF-8 locale (required by Moodle bootstrap)
+        run: |
+          sudo locale-gen en_AU.UTF-8
+          sudo update-locale
+
+      - name: Initialise PHPUnit environment
+        run: |
+          cd $MOODLE_ROOT
+          php admin/tool/phpunit/cli/init.php
+
+      - name: PHPUnit — local_vbs_myoverview
+        run: |
+          cd $MOODLE_ROOT && vendor/bin/phpunit \
+            --filter '(badge_mapper_test|state_computer_test|enrich_courses_test)'
+
+  # ── Behat acceptance tests ─────────────────────────────────────────────────
+  # Runs @local_vbs_myoverview scenarios (view_course_list.feature).
+  # All scenarios are @javascript and require Selenium + a live web server.
+  #
+  # CI watch-list (arch-reviewer VBS-131 — not blockers, just first-run items):
+  #   1. Selector chain in i_follow_the_next_page_in_the_course_list:
+  #      [data-action="load-more"] / .paging-bar-next / a[aria-label="Next page"]
+  #      Not yet cross-checked against Moodle 4.x block_myoverview markup.
+  #      Only the @vbs_pagination scenario would fail; all other 14 pass.
+  #   2. Config key block_myoverview|pagingsize may be renamed in Moodle 4.x
+  #      (e.g. courses_per_page). If pagination scenario runs with the default
+  #      page size, load-more will not appear. Fix the fixture key accordingly.
+  behat:
+    name: Behat (Moodle 4.4 / PHP 8.1 / Chrome)
+    runs-on: ubuntu-22.04
+
+    env:
+      MOODLE_ROOT: /opt/moodle
+      MOODLE_DATA: /opt/moodledata
+      BEHAT_DATA: /opt/behatdata
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: moodle
+          POSTGRES_PASSWORD: moodle
+          POSTGRES_DB: moodle
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      selenium:
+        image: selenium/standalone-chrome:4
+        ports: ['4444:4444']
+        options: --shm-size=2g
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: plugin
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: pgsql, zip, gd, curl, soap, intl, mbstring, xml
+          ini-values: max_input_vars=5000
+          coverage: none
+
+      - name: Clone Moodle 4.4 (shallow)
+        run: |
+          git clone --depth=1 --branch MOODLE_404_STABLE \
+            https://github.com/moodle/moodle.git $MOODLE_ROOT
+
+      - name: Place plugin under local/vbs_myoverview
+        run: cp -r plugin $MOODLE_ROOT/local/vbs_myoverview
+
+      - name: Composer install (Moodle vendor + Behat)
+        run: |
+          cd $MOODLE_ROOT
+          composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Install en_AU.UTF-8 locale (required by Moodle bootstrap)
+        run: |
+          sudo locale-gen en_AU.UTF-8
+          sudo update-locale
+
+      - name: Write Moodle config.php (Behat)
+        run: |
+          # Selenium runs in a Docker container; Chrome must reach the PHP server
+          # via the Docker bridge gateway (not localhost, which is the container's loopback).
+          SELENIUM_ID=$(docker ps --filter "ancestor=selenium/standalone-chrome:4" -q | head -1)
+          BEHAT_HOST=$(docker inspect "$SELENIUM_ID" --format '{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}')
+          echo "behat_wwwroot will use Docker gateway: $BEHAT_HOST"
+          mkdir -p $MOODLE_DATA $BEHAT_DATA
+          {
+            echo "<?php"
+            echo "global \$CFG; \$CFG = new stdClass();"
+            echo "\$CFG->dbtype    = 'pgsql';"
+            echo "\$CFG->dblibrary = 'native';"
+            echo "\$CFG->dbhost    = '127.0.0.1';"
+            echo "\$CFG->dbname    = 'moodle';"
+            echo "\$CFG->dbuser    = 'moodle';"
+            echo "\$CFG->dbpass    = 'moodle';"
+            echo "\$CFG->prefix    = 'mdl_';"
+            echo "\$CFG->dboptions = ['dbport' => '5432'];"
+            echo "\$CFG->wwwroot   = 'http://localhost';"
+            echo "\$CFG->dataroot  = '$MOODLE_DATA';"
+            echo "\$CFG->admin     = 'admin';"
+            echo "\$CFG->directorypermissions = 0777;"
+            echo "\$CFG->behat_prefix   = 'bht_';"
+            echo "\$CFG->behat_dataroot = '$BEHAT_DATA';"
+            echo "\$CFG->behat_wwwroot  = 'http://$BEHAT_HOST:8000';"
+            echo "\$CFG->behat_profiles = ["
+            echo "  'default' => ["
+            echo "    'browser' => 'chrome',"
+            echo "    'wd_host' => 'http://localhost:4444/wd/hub',"
+            echo "    'capabilities' => ["
+            echo "      'extra_capabilities' => ["
+            echo "        'goog:chromeOptions' => ['args' => ['--headless', '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu']],"
+            echo "      ],"
+            echo "    ],"
+            echo "  ],"
+            echo "];"
+            echo "require_once(__DIR__ . '/lib/setup.php');"
+          } > $MOODLE_ROOT/config.php
+
+      - name: Initialise Behat environment
+        run: |
+          cd $MOODLE_ROOT
+          php admin/tool/behat/cli/init.php
+
+      - name: Start PHP built-in web server
+        run: |
+          php -S 0.0.0.0:8000 -t $MOODLE_ROOT &
+          timeout 30 bash -c 'until curl -sf http://localhost:8000/ >/dev/null 2>&1; do sleep 1; done'
+
+      - name: Run Behat — @local_vbs_myoverview
+        run: |
+          cd $MOODLE_ROOT
+          vendor/bin/behat \
+            --config $BEHAT_DATA/behatrun/behat/behat.yml \
+            --profile=default \
+            --tags='@local_vbs_myoverview' \
+            --format=pretty

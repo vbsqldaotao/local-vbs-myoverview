@@ -174,6 +174,8 @@ class enrich_courses extends external_api {
                 'courseid' => new external_value(PARAM_INT, 'Course id'),
                 'vbsbadges' => new external_multiple_structure(
                     new external_single_structure([
+                        'type' => new external_value(PARAM_ALPHA,
+                            'Semantic badge type (delivery|lifecycle|enrollment); rendered as data-badge-type'),
                         'label' => new external_value(PARAM_TEXT, 'Badge label'),
                         'classes' => new external_value(PARAM_TEXT, 'Bootstrap classes for the badge chip'),
                     ]),
