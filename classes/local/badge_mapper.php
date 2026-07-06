@@ -33,6 +33,15 @@ class badge_mapper {
     /** @var string Outlined chip used for the optional delivery-mode badge. */
     const OUTLINE_DELIVERY = 'border border-secondary text-body bg-white';
 
+    /** @var string Semantic type of the delivery (hình thức) badge — emitted as data-badge-type. */
+    const TYPE_DELIVERY = 'delivery';
+
+    /** @var string Semantic type of the lifecycle (trạng thái học) badge — emitted as data-badge-type. */
+    const TYPE_LIFECYCLE = 'lifecycle';
+
+    /** @var string Semantic type of the enrollment badge — emitted as data-badge-type. */
+    const TYPE_ENROLLMENT = 'enrollment';
+
     /** @var string[] Canonical delivery-mode values that yield a badge. */
     const DELIVERY_MODES = ['online', 'offline', 'blended'];
 
@@ -42,7 +51,7 @@ class badge_mapper {
      * @param string|null $deliverymode canonical delivery mode or null/unknown (badge omitted)
      * @param string $lifecyclestate one of state_computer::LIFECYCLE_*
      * @param string $enrollmentstate one of state_computer::ENROL_*
-     * @return array[] list of ['label' => string, 'classes' => string] in card order
+     * @return array[] list of ['type' => string, 'label' => string, 'classes' => string] in card order
      */
     public static function build_badges(?string $deliverymode, string $lifecyclestate, string $enrollmentstate): array {
         $badges = [];
@@ -59,7 +68,7 @@ class badge_mapper {
      * Optional delivery-mode (hình thức) badge — outlined, omitted when unknown.
      *
      * @param string|null $mode raw delivery mode value
-     * @return array|null ['label' => string, 'classes' => string] or null
+     * @return array|null ['type' => string, 'label' => string, 'classes' => string] or null
      */
     public static function delivery_badge(?string $mode): ?array {
         if ($mode === null || $mode === '') {
@@ -70,6 +79,7 @@ class badge_mapper {
             return null;
         }
         return [
+            'type' => self::TYPE_DELIVERY,
             'label' => get_string('delivery_' . $mode, 'local_vbs_myoverview'),
             'classes' => self::OUTLINE_DELIVERY,
         ];
@@ -79,10 +89,11 @@ class badge_mapper {
      * Lifecycle badge — colored chip.
      *
      * @param string $state one of state_computer::LIFECYCLE_*
-     * @return array ['label' => string, 'classes' => string]
+     * @return array ['type' => string, 'label' => string, 'classes' => string]
      */
     public static function lifecycle_badge(string $state): array {
         return [
+            'type' => self::TYPE_LIFECYCLE,
             'label' => get_string('lifecycle_' . $state, 'local_vbs_myoverview'),
             'classes' => self::lifecycle_classes($state),
         ];
@@ -92,10 +103,11 @@ class badge_mapper {
      * Enrollment badge — outlined chip.
      *
      * @param string $state one of state_computer::ENROL_*
-     * @return array ['label' => string, 'classes' => string]
+     * @return array ['type' => string, 'label' => string, 'classes' => string]
      */
     public static function enrollment_badge(string $state): array {
         return [
+            'type' => self::TYPE_ENROLLMENT,
             'label' => get_string('enrollment_' . $state, 'local_vbs_myoverview'),
             'classes' => self::enrollment_classes($state),
         ];

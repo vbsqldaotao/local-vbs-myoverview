@@ -111,4 +111,134 @@ final class state_computer_test extends \advanced_testcase {
             $computer->compute_enrollment_state($course->id, $user->id)
         );
     }
+
+    /**
+     * Enable (or create) an active `self` enrolment instance that allows new
+     * enrolments on a course, so it qualifies as "open for registration".
+     *
+     * @param \stdClass $course course record
+     * @param array $overrides field overrides on the enrol row (e.g. enrolstartdate)
+     * @return void
+     */
+    private function make_self_enrollable(\stdClass $course, array $overrides = []): void {
+        global $DB, $CFG;
+        // Ensure the self-enrolment plugin is enabled site-wide (state_computer
+        // short-circuits when it is not).
+        $enabled = array_filter(explode(',', (string)($CFG->enrol_plugins_enabled ?? '')));
+        if (!in_array('self', $enabled, true)) {
+            $enabled[] = 'self';
+            set_config('enrol_plugins_enabled', implode(',', $enabled));
+        }
+        $selfplugin = enrol_get_plugin('self');
+        $instance = $DB->get_record('enrol', ['courseid' => $course->id, 'enrol' => 'self']);
+        if (!$instance) {
+            $instanceid = $selfplugin->add_instance($course, [
+                'status' => ENROL_INSTANCE_ENABLED,
+                'customint6' => 1,
+            ]);
+            $instance = $DB->get_record('enrol', ['id' => $instanceid], '*', MUST_EXIST);
+        }
+        $update = array_merge([
+            'status' => ENROL_INSTANCE_ENABLED,
+            'customint6' => 1, // Allow new enrolments.
+        ], $overrides);
+        foreach ($update as $field => $value) {
+            $DB->set_field('enrol', $field, $value, ['id' => $instance->id]);
+        }
+    }
+
+    /**
+     * A visible course with an open self-enrolment the learner is not in is
+     * reported as open for registration.
+     *
+     * @return void
+     */
+    public function test_open_registration_lists_eligible_course(): void {
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $this->make_self_enrollable($course);
+        $user = $gen->create_user();
+        $this->setUser($user); // can_self_enrol is evaluated against $USER.
+
+        $computer = new state_computer();
+        $this->assertEquals(
+            [(int)$course->id],
+            $computer->get_open_registration_courseids((int)$user->id)
+        );
+    }
+
+    /**
+     * A course the learner is already enrolled in is half (a), not "open".
+     *
+     * @return void
+     */
+    public function test_open_registration_excludes_enrolled_course(): void {
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $this->make_self_enrollable($course);
+        $user = $gen->create_user();
+        $gen->enrol_user($user->id, $course->id, null, 'manual', 0, 0, ENROL_USER_ACTIVE);
+        $this->setUser($user);
+
+        $computer = new state_computer();
+        $this->assertSame([], $computer->get_open_registration_courseids((int)$user->id));
+    }
+
+    /**
+     * A course whose self-enrolment is disabled / not allowing new enrolments is
+     * not reported as open.
+     *
+     * @return void
+     */
+    public function test_open_registration_excludes_closed_self_enrol(): void {
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+
+        // Self instance disabled.
+        $disabled = $gen->create_course();
+        $this->make_self_enrollable($disabled, ['status' => ENROL_INSTANCE_DISABLED]);
+
+        // Self instance enabled but new enrolments blocked (customint6 = 0).
+        $noNewEnrols = $gen->create_course();
+        $this->make_self_enrollable($noNewEnrols, ['customint6' => 0]);
+
+        // No self instance at all.
+        $manualonly = $gen->create_course();
+
+        $user = $gen->create_user();
+        $this->setUser($user);
+
+        $computer = new state_computer();
+        $this->assertSame([], $computer->get_open_registration_courseids((int)$user->id));
+    }
+
+    /**
+     * A hidden course is never reported as open even with self-enrolment.
+     *
+     * @return void
+     */
+    public function test_open_registration_excludes_hidden_course(): void {
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course(['visible' => 0]);
+        $this->make_self_enrollable($course);
+        $user = $gen->create_user();
+        $this->setUser($user);
+
+        $computer = new state_computer();
+        $this->assertSame([], $computer->get_open_registration_courseids((int)$user->id));
+    }
+
+    /**
+     * A non-positive user id yields an empty result (defensive guard).
+     *
+     * @return void
+     */
+    public function test_open_registration_empty_for_invalid_user(): void {
+        $this->resetAfterTest();
+        $computer = new state_computer();
+        $this->assertSame([], $computer->get_open_registration_courseids(0));
+    }
 }

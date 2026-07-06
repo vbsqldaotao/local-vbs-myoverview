@@ -18,6 +18,7 @@ namespace local_vbs_myoverview;
 
 use core_external\external_api;
 use local_vbs_myoverview\external\enrich_courses;
+use local_vbs_myoverview\local\badge_mapper;
 
 /**
  * Tests for the enrich_courses external function.
@@ -62,6 +63,17 @@ final class enrich_courses_test extends \advanced_testcase {
         $this->assertNotEmpty($result[0]['vbsdaterange']);
         // Pilot: register CTA is always empty (open_for_registration deferred).
         $this->assertSame('', $result[0]['vbsregisterurl']);
+
+        // Round-trip the semantic data-badge-type anchor through the WS return
+        // structure: because $result came through clean_returnvalue(execute_returns()),
+        // a present 'type' key proves execute_returns declares it AND badge_mapper
+        // emits it — a mismatch between the two would fail here at the PHP layer,
+        // before Behat. This course has no delivery_mode, so only lifecycle +
+        // enrollment badges are present.
+        $this->assertArrayHasKey('type', $result[0]['vbsbadges'][0]);
+        $types = array_column($result[0]['vbsbadges'], 'type');
+        $this->assertContains(badge_mapper::TYPE_LIFECYCLE, $types);
+        $this->assertContains(badge_mapper::TYPE_ENROLLMENT, $types);
     }
 
     /**
