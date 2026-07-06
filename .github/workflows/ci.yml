@@ -117,7 +117,7 @@ jobs:
       - name: PHPUnit — local_vbs_myoverview
         run: |
           cd $MOODLE_ROOT && vendor/bin/phpunit \
-            --filter '(badge_mapper_test|state_computer_test|enrich_courses(_ws)?_test|open_registration_summary_ws_test)'
+            --filter '(badge_mapper_test|state_computer_test|enrich_courses(_ws)?_test|open_registration_summary_ws_test|get_learning_progress_test)'
 
   # ── Behat acceptance tests ─────────────────────────────────────────────────
   # Runs @local_vbs_myoverview scenarios (view_course_list.feature).
