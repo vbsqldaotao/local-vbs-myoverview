@@ -241,9 +241,11 @@ class get_learning_progress extends external_api {
             $status = self::plan_item_status((int)$course->id, $userid);
             $counts[$status]++;
             $rows[] = [
+                'itemid' => (int)$item->id,
                 'courseid' => (int)$course->id,
                 'coursename' => self::course_name($course),
-                'plan_status' => $status,
+                // Field name is `status` to match the F02 frontend contract (VBS-160).
+                'status' => $status,
                 // No per-item duedate exists in vbs_plan_item — always null.
                 'duedate' => null,
             ];
@@ -501,9 +503,10 @@ class get_learning_progress extends external_api {
                 'not_started_items' => new external_value(PARAM_INT, 'Items not started'),
                 'items' => new external_multiple_structure(
                     new external_single_structure([
+                        'itemid' => new external_value(PARAM_INT, 'Plan item id'),
                         'courseid' => new external_value(PARAM_INT, 'Course id'),
                         'coursename' => new external_value(PARAM_TEXT, 'Course full name'),
-                        'plan_status' => new external_value(PARAM_ALPHAEXT, 'completed|in_progress|not_started'),
+                        'status' => new external_value(PARAM_ALPHAEXT, 'completed|in_progress|not_started'),
                         'duedate' => new external_value(PARAM_INT, 'Item due date (always null — no source column)',
                             VALUE_OPTIONAL, null, NULL_ALLOWED),
                     ])
