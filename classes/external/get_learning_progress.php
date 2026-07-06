@@ -527,7 +527,7 @@ class get_learning_progress extends external_api {
             ], 'Derived training plan for the current year, or null', VALUE_OPTIONAL),
             'certificates' => new external_multiple_structure(
                 new external_single_structure([
-                    'certid' => new external_value(PARAM_INT, 'Certificate issue id'),
+                    'certid' => new external_value(PARAM_INT, 'Certificate id (customcert instance id, used to build download URL)'),
                     'certname' => new external_value(PARAM_TEXT, 'Certificate name'),
                     'courseid' => new external_value(PARAM_INT, 'Course id'),
                     'coursename' => new external_value(PARAM_TEXT, 'Course full name'),
