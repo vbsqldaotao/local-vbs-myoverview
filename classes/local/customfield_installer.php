@@ -73,7 +73,7 @@ class customfield_installer {
             'description' => '',
             'descriptionformat' => FORMAT_HTML,
             'configdata' => [
-                'options' => "online\noffline\nblended",
+                'options' => "\nonline\noffline\nblended",
                 'defaultvalue' => '',
                 'required' => 0,
                 'uniquevalues' => 0,
