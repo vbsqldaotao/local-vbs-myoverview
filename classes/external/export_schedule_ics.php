@@ -48,7 +48,7 @@ class export_schedule_ics extends external_api {
                 VALUE_DEFAULT, 0),
             'course_id'    => new external_value(PARAM_INT,  'Filter by course id (0 = all)',
                 VALUE_DEFAULT, 0),
-            'session_type' => new external_value(PARAM_ALPHA, 'Filter: facetoface | quiz | vbs_exam | "" = all',
+            'session_type' => new external_value(PARAM_ALPHANUMEXT, 'Filter: facetoface | quiz | vbs_exam | "" = all',
                 VALUE_DEFAULT, ''),
         ]);
     }

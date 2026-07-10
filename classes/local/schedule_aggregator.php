@@ -85,7 +85,11 @@ class schedule_aggregator {
     }
 
     /**
-     * Face-to-face sessions the user has signed up for.
+     * Face-to-face sessions the user has an active (non-cancelled/declined) signup for.
+     *
+     * Only signups with statuscode >= 60 (APPROVED / WAITLISTED / BOOKED / attended)
+     * are included.  Cancelled (30) and Declined (40) signups are excluded so a user
+     * who cancelled still does not see the session on their schedule or ICS feed.
      *
      * @param int    $userid
      * @param int    $datefrom
@@ -107,6 +111,7 @@ class schedule_aggregator {
 
         // facetoface_sessions has no location field in the core schema; location
         // is a custom field. We fall back to session details for description.
+        // Join facetoface_signups_status to filter out cancelled/declined signups.
         $sql = "SELECT fsd.id AS dateid,
                        fs.id AS sessionid,
                        f.id  AS facetofaceid,
@@ -116,6 +121,8 @@ class schedule_aggregator {
                        fsd.timestart,
                        fsd.timefinish
                   FROM {facetoface_signups} sig
+                  JOIN {facetoface_signups_status} fss
+                       ON fss.signupid = sig.id AND fss.superceded = 0 AND fss.statuscode >= 60
                   JOIN {facetoface_sessions} fs ON fs.id = sig.sessionid
                   JOIN {facetoface} f            ON f.id = fs.facetoface
                   JOIN {facetoface_sessions_dates} fsd ON fsd.sessionid = fs.id
@@ -139,6 +146,14 @@ class schedule_aggregator {
 
         $rows = $DB->get_records_sql($sql, $params);
 
+        if (!$rows) {
+            return [];
+        }
+
+        // Batch-fetch course names — one query instead of N.
+        $courseids = array_unique(array_column((array)$rows, 'courseid'));
+        $courses = $DB->get_records_list('course', 'id', $courseids, '', 'id, fullname');
+
         // Fetch trainer names for these sessions in bulk.
         $sessionids = array_unique(array_column((array)$rows, 'sessionid'));
         $instructors_map = $this->get_facetoface_instructors($sessionids);
@@ -157,14 +172,21 @@ class schedule_aggregator {
                 continue;
             }
 
-            $course = $DB->get_record('course', ['id' => $row->courseid], 'id, fullname', IGNORE_MISSING);
+            $course = $courses[$row->courseid] ?? null;
+            $coursecontext = $course
+                ? \context_course::instance((int)$row->courseid, IGNORE_MISSING)
+                : null;
 
             $result[] = [
                 'id'           => self::TYPE_FACETOFACE . ':' . $row->dateid,
                 'session_type' => self::TYPE_FACETOFACE,
-                'title'        => format_string($row->activity_name),
+                'title'        => format_string($row->activity_name, true,
+                    ['context' => $coursecontext ?? \context_system::instance()]),
                 'courseid'     => (int)$row->courseid,
-                'course_name'  => $course ? format_string($course->fullname) : '',
+                'course_name'  => $course
+                    ? format_string($course->fullname, true,
+                        ['context' => $coursecontext ?? \context_system::instance()])
+                    : '',
                 'timestart'    => (int)$row->timestart,
                 'timefinish'   => (int)$row->timefinish,
                 'location'     => '',
@@ -263,27 +285,43 @@ class schedule_aggregator {
         // Deduplicate: a learner may have multiple enrolments in the same course.
         $rows = $DB->get_records_sql($sql, $params);
 
-        $result = [];
-        $seen = [];
-        foreach ($rows as $row) {
-            if (isset($seen[$row->id])) {
-                continue;
-            }
-            $seen[$row->id] = true;
+        if (!$rows) {
+            return [];
+        }
 
+        // Deduplicate quiz ids (learner may have multiple enrolments in the same course).
+        $unique_rows = [];
+        foreach ($rows as $row) {
+            if (!isset($unique_rows[$row->id])) {
+                $unique_rows[$row->id] = $row;
+            }
+        }
+
+        // Batch-fetch course names — one query instead of N.
+        $courseids = array_unique(array_column($unique_rows, 'courseid'));
+        $courses = $DB->get_records_list('course', 'id', $courseids, '', 'id, fullname');
+
+        $result = [];
+        foreach ($unique_rows as $row) {
             $timeclose = (int)$row->timeclose;
             if ($timeclose <= 0 && (int)$row->timelimit > 0) {
                 $timeclose = (int)$row->timeopen + (int)$row->timelimit;
             }
 
-            $course = $DB->get_record('course', ['id' => $row->courseid], 'id, fullname', IGNORE_MISSING);
+            $course = $courses[$row->courseid] ?? null;
+            $coursecontext = $course
+                ? \context_course::instance((int)$row->courseid, IGNORE_MISSING)
+                : null;
+            $ctx = $coursecontext ?? \context_system::instance();
 
             $result[] = [
                 'id'           => self::TYPE_QUIZ . ':' . $row->id,
                 'session_type' => self::TYPE_QUIZ,
-                'title'        => format_string($row->name),
+                'title'        => format_string($row->name, true, ['context' => $ctx]),
                 'courseid'     => (int)$row->courseid,
-                'course_name'  => $course ? format_string($course->fullname) : '',
+                'course_name'  => $course
+                    ? format_string($course->fullname, true, ['context' => $ctx])
+                    : '',
                 'timestart'    => (int)$row->timeopen,
                 'timefinish'   => $timeclose,
                 'location'     => '',
@@ -345,15 +383,16 @@ class schedule_aggregator {
 
         $result = [];
         foreach ($rows as $row) {
+            $sysctx = \context_system::instance();
             $result[] = [
                 'id'           => self::TYPE_VBS_EXAM . ':' . $row->id,
                 'session_type' => self::TYPE_VBS_EXAM,
-                'title'        => format_string($row->name),
+                'title'        => format_string($row->name, true, ['context' => $sysctx]),
                 'courseid'     => 0,
-                'course_name'  => format_string($row->topic_name),
+                'course_name'  => format_string($row->topic_name, true, ['context' => $sysctx]),
                 'timestart'    => (int)$row->starttime,
                 'timefinish'   => (int)$row->endtime,
-                'location'     => format_string((string)($row->location ?? '')),
+                'location'     => format_string((string)($row->location ?? ''), true, ['context' => $sysctx]),
                 'instructor'   => '',
                 'description'  => '',
             ];

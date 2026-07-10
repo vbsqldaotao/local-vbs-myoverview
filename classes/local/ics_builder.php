@@ -114,17 +114,34 @@ class ics_builder {
     }
 
     /**
-     * Fold long content lines at 75 octets per RFC 5545 §3.1.
+     * Fold long content lines at ~75 octets per RFC 5545 §3.1, respecting UTF-8 boundaries.
      *
-     * @param string $value Already-escaped property value.
+     * str_split() counts bytes, which would split multi-byte sequences (e.g. Vietnamese
+     * characters are 2-3 bytes each) producing invalid UTF-8. We retreat from byte 74
+     * until we are no longer inside a UTF-8 continuation byte (0x80–0xBF).
+     *
+     * @param string $value Already-escaped property value (UTF-8).
      * @return string Value with embedded CRLF+space folds if needed.
      */
     protected function fold(string $value): string {
         if (strlen($value) <= 75) {
             return $value;
         }
-        // Split into 75-char chunks; continuation lines are prefixed with a space.
-        $chunks = str_split($value, 75);
-        return implode("\r\n ", $chunks);
+        $out = [];
+        $len = strlen($value);
+        $i = 0;
+        while ($i < $len) {
+            $take = min(74, $len - $i);
+            // Retreat until we are not pointing at a UTF-8 continuation byte (10xxxxxx).
+            while ($take > 0 && (ord($value[$i + $take]) & 0xC0) === 0x80) {
+                $take--;
+            }
+            if ($take === 0) {
+                $take = 1; // Prevent infinite loop on malformed input.
+            }
+            $out[] = substr($value, $i, $take);
+            $i += $take;
+        }
+        return implode("\r\n ", $out);
     }
 }

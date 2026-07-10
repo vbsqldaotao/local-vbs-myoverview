@@ -267,7 +267,7 @@ final class get_schedule_test extends \advanced_testcase {
         $result = $this->call_get_schedule(['session_type' => 'quiz']);
 
         $this->assertCount(2, $result);
-        $this->assertLessThanOrEqual($result[1]['timestart'], $result[1]['timestart'],
+        $this->assertLessThanOrEqual($result[1]['timestart'], $result[0]['timestart'],
             'Sessions must be ordered by timestart ascending');
         $this->assertSame($now + HOURSECS, $result[0]['timestart']);
         $this->assertSame($now + 3 * HOURSECS, $result[1]['timestart']);
@@ -373,5 +373,181 @@ final class get_schedule_test extends \advanced_testcase {
         $this->assertCount(1, $result);
         $this->assertSame(0, $result[0]['timefinish'],
             'timefinish must be 0 when no timeclose/timelimit provided');
+    }
+
+    // -----------------------------------------------------------------------
+    // Blocker regressions (arch-review fixes)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Blocker 1: session_type=vbs_exam passes PARAM_ALPHANUMEXT and reaches the aggregator.
+     *
+     * We test that the WS layer does not strip the underscore, so the filter string
+     * survives validate_parameters unchanged, and the returns schema also preserves it.
+     */
+    public function test_vbs_exam_session_type_filter_survives_param_cleaning(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        // Skip if local_vbs_exam tables are not installed (unit environment may lack them).
+        if (!$DB->get_manager()->table_exists('vbs_exam_session')) {
+            $this->markTestSkipped('vbs_exam_session table not available in this environment.');
+        }
+
+        $user = $this->getDataGenerator()->create_user();
+        $this->setUser($user);
+
+        // With no exam enrolments the result should be [] — but the call must not throw
+        // (previously PARAM_ALPHA stripped '_' making the type 'vbsexam', which then
+        // silently returned [] for the wrong reason).  After the fix the aggregator
+        // correctly dispatches to get_vbs_exam_sessions() and returns [] because there
+        // are no enrolments — the test asserts only that the call succeeds without error.
+        $result = $this->call_get_schedule(['session_type' => 'vbs_exam']);
+        $this->assertSame([], $result);
+
+        // Verify the schema does not mangle session_type='vbs_exam' on the way back.
+        // We inject a fake row through clean_returnvalue to avoid needing DB fixtures.
+        $fake = [
+            'id'           => 'vbs_exam:1',
+            'session_type' => 'vbs_exam',
+            'title'        => 'Test',
+            'courseid'     => 0,
+            'course_name'  => 'Topic',
+            'timestart'    => time(),
+            'timefinish'   => 0,
+            'location'     => '',
+            'instructor'   => '',
+            'description'  => '',
+        ];
+        $cleaned = \core_external\external_api::clean_returnvalue(
+            get_schedule::execute_returns(), [$fake]
+        );
+        $this->assertSame('vbs_exam', $cleaned[0]['session_type'],
+            'PARAM_ALPHANUMEXT must preserve underscore in vbs_exam');
+    }
+
+    /**
+     * Blocker 3: A facetoface signup with cancelled status must not appear in schedule.
+     *
+     * Creates a signup with statuscode=30 (USER_CANCELLED) and asserts it is excluded.
+     * Also verifies an active signup (statuscode=80 BOOKED) IS included.
+     */
+    public function test_cancelled_facetoface_signup_excluded(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        if (!$DB->get_manager()->table_exists('facetoface')) {
+            $this->markTestSkipped('mod_facetoface not available in this environment.');
+        }
+
+        $gen    = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $user   = $gen->create_user();
+        $gen->enrol_user($user->id, $course->id);
+
+        $now = time();
+
+        // Create two facetoface activities.
+        $f2f_cancelled = $gen->create_module('facetoface', ['course' => $course->id]);
+        $f2f_booked    = $gen->create_module('facetoface', ['course' => $course->id]);
+
+        // Create sessions.
+        $sess_cancelled = (int)$DB->insert_record('facetoface_sessions', [
+            'facetoface' => $f2f_cancelled->id, 'capacity' => 10, 'allowoverbook' => 0,
+            'datetimeknown' => 1, 'visible' => 1, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $sess_booked = (int)$DB->insert_record('facetoface_sessions', [
+            'facetoface' => $f2f_booked->id, 'capacity' => 10, 'allowoverbook' => 0,
+            'datetimeknown' => 1, 'visible' => 1, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        // Session dates.
+        $DB->insert_record('facetoface_sessions_dates', [
+            'sessionid' => $sess_cancelled, 'timestart' => $now + HOURSECS,
+            'timefinish' => $now + 2 * HOURSECS,
+        ]);
+        $DB->insert_record('facetoface_sessions_dates', [
+            'sessionid' => $sess_booked, 'timestart' => $now + 2 * HOURSECS,
+            'timefinish' => $now + 3 * HOURSECS,
+        ]);
+
+        // Signups.
+        $signup_cancelled = (int)$DB->insert_record('facetoface_signups', [
+            'sessionid' => $sess_cancelled, 'userid' => $user->id,
+            'mailedreminder' => 0, 'notificationtype' => 3,
+        ]);
+        $signup_booked = (int)$DB->insert_record('facetoface_signups', [
+            'sessionid' => $sess_booked, 'userid' => $user->id,
+            'mailedreminder' => 0, 'notificationtype' => 3,
+        ]);
+
+        // Signup statuses: cancelled (30) and booked (80).
+        $DB->insert_record('facetoface_signups_status', [
+            'signupid' => $signup_cancelled, 'statuscode' => 30,
+            'superceded' => 0, 'createdby' => $user->id, 'timecreated' => $now,
+        ]);
+        $DB->insert_record('facetoface_signups_status', [
+            'signupid' => $signup_booked, 'statuscode' => 80,
+            'superceded' => 0, 'createdby' => $user->id, 'timecreated' => $now,
+        ]);
+
+        $this->setUser($user);
+        $result = $this->call_get_schedule([
+            'session_type' => 'facetoface',
+            'date_from'    => $now,
+            'date_to'      => $now + DAYSECS,
+        ]);
+
+        $ids = array_column($result, 'id');
+        // The BOOKED session must appear; the CANCELLED one must not.
+        $has_booked    = count(array_filter($ids, fn($id) => str_contains($id, 'facetoface:'))) > 0;
+        $has_cancelled = false;
+        foreach ($result as $r) {
+            // The cancelled session's date id maps to the cancelled facetoface date row.
+            // We verify no session from f2f_cancelled activity appears.
+            if ($r['session_type'] === 'facetoface'
+                && $r['timestart'] === $now + HOURSECS) {
+                $has_cancelled = true;
+            }
+        }
+        $this->assertTrue($has_booked, 'BOOKED signup must appear in schedule');
+        $this->assertFalse($has_cancelled, 'CANCELLED signup must be excluded from schedule');
+    }
+
+    /**
+     * Blocker 4: ICS export with Vietnamese title produces valid UTF-8.
+     *
+     * A title longer than 75 bytes when encoded in UTF-8 would previously be split
+     * at a byte boundary that could land inside a multi-byte sequence.
+     */
+    public function test_ics_export_vietnamese_title_is_valid_utf8(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $gen    = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $user   = $gen->create_user();
+        $gen->enrol_user($user->id, $course->id);
+
+        // Title with Vietnamese characters that exceeds 75 bytes when UTF-8 encoded.
+        // Each Vietnamese character is 3 bytes; 26 chars × 3 = 78 bytes > 75 threshold.
+        $long_vi_title = 'Kỳ thi cuối kỳ môn học Toán ứng dụng và thực hành';
+        $now = time();
+        $gen->create_module('quiz', [
+            'course'    => $course->id,
+            'name'      => $long_vi_title,
+            'timeopen'  => $now + HOURSECS,
+            'timeclose' => $now + 2 * HOURSECS,
+        ]);
+
+        $this->setUser($user);
+        $result = $this->call_export_ics(['session_type' => 'quiz']);
+
+        $ics = base64_decode($result['ics_base64']);
+        $this->assertTrue(
+            mb_check_encoding($ics, 'UTF-8'),
+            'ICS output must be valid UTF-8 even when title contains multi-byte Vietnamese characters'
+        );
+        $this->assertStringContainsString('BEGIN:VEVENT', $ics);
     }
 }

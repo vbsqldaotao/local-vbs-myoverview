@@ -48,7 +48,7 @@ class get_schedule extends external_api {
                 VALUE_DEFAULT, 0),
             'course_id'  => new external_value(PARAM_INT,  'Filter by course id (0 = all enrolled courses)',
                 VALUE_DEFAULT, 0),
-            'session_type' => new external_value(PARAM_ALPHA, 'Filter: facetoface | quiz | vbs_exam | "" = all',
+            'session_type' => new external_value(PARAM_ALPHANUMEXT, 'Filter: facetoface | quiz | vbs_exam | "" = all',
                 VALUE_DEFAULT, ''),
             'instructor' => new external_value(PARAM_TEXT,  'Substring filter on instructor name (empty = all)',
                 VALUE_DEFAULT, ''),
@@ -114,7 +114,7 @@ class get_schedule extends external_api {
         return new external_multiple_structure(
             new external_single_structure([
                 'id'           => new external_value(PARAM_TEXT, 'Composite id: <type>:<source_id>'),
-                'session_type' => new external_value(PARAM_ALPHA, 'Session source type'),
+                'session_type' => new external_value(PARAM_ALPHANUMEXT, 'Session source type'),
                 'title'        => new external_value(PARAM_TEXT, 'Session or activity title'),
                 'courseid'     => new external_value(PARAM_INT,  'Course id (0 for standalone exam sessions)'),
                 'course_name'  => new external_value(PARAM_TEXT, 'Course or exam topic name'),
