@@ -35,4 +35,24 @@ $functions = [
         'capabilities' => '',
         'services'    => [],
     ],
+    'local_vbs_myoverview_get_schedule' => [
+        'classname'   => 'local_vbs_myoverview\external\get_schedule',
+        'methodname'  => 'execute',
+        'description' => 'Return all scheduled sessions (face-to-face, quiz, VBS exam) for the current '
+            . 'learner in a unified format, with optional date range and filter params.',
+        'type'        => 'read',
+        'ajax'        => true,
+        'capabilities' => '',
+        'services'    => [],
+    ],
+    'local_vbs_myoverview_export_schedule_ics' => [
+        'classname'   => 'local_vbs_myoverview\external\export_schedule_ics',
+        'methodname'  => 'execute',
+        'description' => 'Export the current learner\'s schedule as a base64-encoded iCalendar (ICS) feed '
+            . 'for calendar import.',
+        'type'        => 'read',
+        'ajax'        => true,
+        'capabilities' => '',
+        'services'    => [],
+    ],
 ];

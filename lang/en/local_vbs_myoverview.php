@@ -48,3 +48,8 @@ $string['lifecycle_completed'] = 'Completed';
 $string['enrollment_assigned'] = 'Assigned';
 $string['enrollment_pending_approval'] = 'Pending approval';
 $string['enrollment_open_for_registration'] = 'Open for registration';
+
+// Schedule tracking (F04).
+$string['schedule_type_facetoface'] = 'Face-to-face';
+$string['schedule_type_quiz'] = 'Exam / Assessment';
+$string['schedule_type_vbs_exam'] = 'VBS Exam session';
