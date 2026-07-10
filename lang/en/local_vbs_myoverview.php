@@ -94,3 +94,8 @@ $string['progress:empty_certificates'] = 'No certificates have been issued yet.'
 // Loading / error.
 $string['progress:loading'] = 'Loading…';
 $string['progress:loaderror'] = 'Could not load this section. Please try again later.';
+
+// Schedule tracking (F04).
+$string['schedule_type_facetoface'] = 'Face-to-face';
+$string['schedule_type_quiz'] = 'Exam / Assessment';
+$string['schedule_type_vbs_exam'] = 'VBS Exam session';
