@@ -29,7 +29,6 @@
 import Ajax from 'core/ajax';
 import Templates from 'core/templates';
 import Notification from 'core/notification';
-import Pending from 'core/pending';
 import {get_string as getString} from 'core/str';
 
 const COMPONENT = 'local_vbs_myoverview';
@@ -343,26 +342,18 @@ export const init = (config) => {
     }
     bindDownloads(root);
 
-    const pending = new Pending('local_vbs_myoverview/progress:load');
-    // Safety net: if the WS XHR never settles (e.g. the CI single-threaded
-    // PHP built-in server is slow to respond), Moodle's wait_for_pending_js()
-    // — including the @AfterStep hook — would hang until the 30s Behat timeout.
-    // Resolve after 15 s regardless so Behat can proceed. The normal path via
-    // .finally() calls clearTimeout() first to avoid a double-resolve.
-    let pendingResolved = false;
-    const resolvePending = () => {
-        if (!pendingResolved) {
-            pendingResolved = true;
-            pending.resolve();
-        }
-    };
-    const safetyTimer = setTimeout(resolvePending, 15000);
-
     const sections = {};
     root.querySelectorAll(SELECTORS.SECTION).forEach((section) => {
         sections[section.dataset.section] = section;
     });
 
+    // Do not create a core/pending here. The AMD loader (js_call_amd) already
+    // wraps this call with M.util.js_pending / M.util.js_complete, which resolves
+    // immediately when init() returns. Adding our own Pending inside init() creates
+    // a second entry in M.util.pending_js that depends on the Ajax XHR settling —
+    // in CI's single-threaded PHP built-in server this can cause wait_for_pending_js()
+    // to time out (30 s) when many module files are queued ahead of service.php.
+    // Behat steps that need to wait for section rendering use spin() instead.
     fetchProgress(config).then((data) => {
         return Promise.all([
             renderSection(sections.plan, 'progress_section_plan', buildPlanContext(data.training_plan, config)),
@@ -372,14 +363,8 @@ export const init = (config) => {
             renderSection(sections.certificates, 'progress_section_certificates',
                 buildCertificatesContext(data.certificates)),
         ]);
-    // Use console.error instead of Notification.exception: a WS rejection here is a
-    // security gate (cross-user read blocked by required_capability_exception) — not a
-    // user-visible error. More importantly, Notification.exception opens a modal that
-    // creates its own internal Pending resolved only when the user clicks OK, which
-    // blocks wait_for_pending_js() indefinitely in headless Behat (nobody clicks OK).
     // eslint-disable-next-line no-console
-    }).catch((err) => { console.error('[local_vbs_myoverview/progress] WS error:', err); })
-    .finally(() => { clearTimeout(safetyTimer); resolvePending(); });
+    }).catch((err) => { console.error('[local_vbs_myoverview/progress] WS error:', err); });
 };
 
 /**
