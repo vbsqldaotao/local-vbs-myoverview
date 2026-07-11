@@ -764,52 +764,6 @@ class behat_local_vbs_myoverview extends behat_local_vbs_enrol {
     }
 
     /**
-     * Create a pending VBS registration for an arbitrary user on a course.
-     *
-     * Generic counterpart to learner1_has_pending_registration() that takes a
-     * username parameter — needed by vbs_f03_catalog_register.feature TC-02.
-     *
-     * @Given :username has a pending registration for course :shortname
-     */
-    public function user_has_pending_registration_for_course(string $username, string $shortname): void {
-        global $DB;
-        $user   = $DB->get_record('user', ['username' => $username], '*', MUST_EXIST);
-        $course = $DB->get_record('course', ['shortname' => $shortname], '*', MUST_EXIST);
-
-        if (!$DB->record_exists('vbs_course_settings', ['courseid' => $course->id])) {
-            $DB->insert_record('vbs_course_settings', [
-                'courseid'       => $course->id,
-                'enroltype'      => 'manual',
-                'enrolstartdate' => 0,
-                'enrolenddate'   => 0,
-                'maxstudents'    => 0,
-                'enrolled_count' => 0,
-                'timecreated'    => time(),
-                'timemodified'   => time(),
-            ]);
-        }
-
-        $existing = $DB->get_record('vbs_course_registration', [
-            'userid'   => $user->id,
-            'courseid' => $course->id,
-        ]);
-        $now = time();
-        if ($existing) {
-            $DB->set_field('vbs_course_registration', 'status', 'pending', ['id' => $existing->id]);
-            $DB->set_field('vbs_course_registration', 'timemodified', $now, ['id' => $existing->id]);
-        } else {
-            $DB->insert_record('vbs_course_registration', [
-                'courseid'     => $course->id,
-                'userid'       => $user->id,
-                'status'       => 'pending',
-                'enrolled_at'  => $now,
-                'timecreated'  => $now,
-                'timemodified' => $now,
-            ]);
-        }
-    }
-
-    /**
      * Stub the VBS exam course-registration WS so the next call resolves with
      * success without hitting the real backend (TC-05).
      *
