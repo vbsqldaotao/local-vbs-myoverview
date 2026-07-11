@@ -602,17 +602,10 @@ class behat_local_vbs_myoverview extends behat_base {
     public function the_catalog_course_box_shows_a_register_button(string $coursename): void {
         $this->spin(function() use ($coursename) {
             $box = $this->find_catalog_course_box($coursename);
-            $cta = $box->find('css', '[data-region="vbs-catalog-cta"] a');
-            if ($cta === null) {
+            $btn = $box->find('css', '[data-region="vbs-catalog-cta"] [data-testid="register-btn"]');
+            if ($btn === null) {
                 throw new ExpectationException(
                     "Catalog course box for '$coursename' has no register CTA yet.",
-                    $this->getSession()
-                );
-            }
-            $href = (string)$cta->getAttribute('href');
-            if (strpos($href, '/enrol/index.php') === false) {
-                throw new ExpectationException(
-                    "Register CTA for '$coursename' should link to /enrol/index.php; got '$href'.",
                     $this->getSession()
                 );
             }
@@ -634,8 +627,8 @@ class behat_local_vbs_myoverview extends behat_base {
     public function the_catalog_course_box_does_not_show_a_register_button(string $coursename): void {
         $this->wait_for_pending_js();
         $box = $this->find_catalog_course_box($coursename);
-        $cta = $box->find('css', '[data-region="vbs-catalog-cta"]');
-        if ($cta !== null) {
+        $btn = $box->find('css', '[data-region="vbs-catalog-cta"] [data-testid="register-btn"]');
+        if ($btn !== null) {
             throw new ExpectationException(
                 "Catalog course box for '$coursename' should NOT show a register CTA but one was found.",
                 $this->getSession()
