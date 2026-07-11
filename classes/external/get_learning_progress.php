@@ -145,6 +145,8 @@ class get_learning_progress extends external_api {
                 'completion_percent' => self::completion_percent($courseid, $userid),
                 'deadline' => self::course_deadline($courseid, $userid),
                 'delivery_mode' => (string)(self::get_delivery_mode($handler, $courseid) ?? ''),
+                'grade_items' => self::build_course_grade_items($courseid, $userid),
+                'attendance_percent' => self::get_attendance_percent($courseid, $userid),
             ];
         }
 
@@ -323,6 +325,84 @@ class get_learning_progress extends external_api {
     }
 
     /**
+     * Graded quiz and assignment items for a course, with the learner's current percent.
+     *
+     * Only non-hidden items with grademax > 0 are returned. Items not yet graded
+     * have percent = 0.
+     *
+     * @param int $courseid course id
+     * @param int $userid learner id
+     * @return array[] list of grade item rows
+     */
+    protected static function build_course_grade_items(int $courseid, int $userid): array {
+        global $DB;
+
+        $sql = "SELECT gi.id, gi.itemname, gi.itemmodule, gi.grademax, gg.finalgrade
+                  FROM {grade_items} gi
+             LEFT JOIN {grade_grades} gg ON gg.itemid = gi.id AND gg.userid = :userid
+                 WHERE gi.courseid = :courseid
+                   AND gi.itemtype = 'mod'
+                   AND gi.itemmodule IN ('quiz', 'assign')
+                   AND gi.grademax > 0
+                   AND gi.hidden = 0
+              ORDER BY gi.sortorder ASC";
+        $records = $DB->get_records_sql($sql, ['courseid' => $courseid, 'userid' => $userid]);
+
+        $rows = [];
+        $coursecontext = \context_course::instance($courseid);
+        foreach ($records as $rec) {
+            $percent = 0;
+            if ($rec->finalgrade !== null && (float)$rec->grademax > 0) {
+                $percent = max(0, min(100, (int)round((float)$rec->finalgrade / (float)$rec->grademax * 100)));
+            }
+            $rows[] = [
+                'itemid' => (int)$rec->id,
+                'itemname' => format_string((string)($rec->itemname ?? ''), true, ['context' => $coursecontext]),
+                'itemmodule' => (string)$rec->itemmodule,
+                'percent' => $percent,
+            ];
+        }
+        return $rows;
+    }
+
+    /**
+     * Attendance percent (0-100) for a learner in a course, or null.
+     *
+     * Returns null when mod_attendance tables are absent or the learner has no
+     * logged sessions in the course.
+     *
+     * Percent = sessions with a "present" (grade > 0) status / total logged sessions.
+     *
+     * @param int $courseid course id
+     * @param int $userid learner id
+     * @return int|null 0-100, or null when unavailable
+     */
+    protected static function get_attendance_percent(int $courseid, int $userid): ?int {
+        global $DB;
+
+        $dbman = $DB->get_manager();
+        if (!$dbman->table_exists('attendance')
+            || !$dbman->table_exists('attendance_sessions')
+            || !$dbman->table_exists('attendance_log')
+            || !$dbman->table_exists('attendance_statuses')) {
+            return null;
+        }
+
+        $sql = "SELECT COUNT(al.id) AS total,
+                       SUM(CASE WHEN ast.grade > 0 THEN 1 ELSE 0 END) AS present
+                  FROM {attendance} att
+                  JOIN {attendance_sessions} s ON s.attendanceid = att.id
+                  JOIN {attendance_log} al ON al.sessionid = s.id AND al.studentid = :userid
+                  JOIN {attendance_statuses} ast ON ast.id = al.statusid AND ast.attendanceid = att.id
+                 WHERE att.course = :courseid";
+        $rec = $DB->get_record_sql($sql, ['courseid' => $courseid, 'userid' => $userid]);
+        if (!$rec || (int)$rec->total === 0) {
+            return null;
+        }
+        return max(0, min(100, (int)round((float)$rec->present / (float)$rec->total * 100)));
+    }
+
+    /**
      * Derive a plan item's status from the learner's completion/enrolment.
      *
      * @param int $courseid course id
@@ -491,6 +571,18 @@ class get_learning_progress extends external_api {
                     'deadline' => new external_value(PARAM_INT, 'Enrolment deadline (unix ts) or null',
                         VALUE_OPTIONAL, null, NULL_ALLOWED),
                     'delivery_mode' => new external_value(PARAM_TEXT, 'Delivery mode custom field', VALUE_DEFAULT, ''),
+                    'grade_items' => new external_multiple_structure(
+                        new external_single_structure([
+                            'itemid' => new external_value(PARAM_INT, 'Grade item id'),
+                            'itemname' => new external_value(PARAM_TEXT, 'Activity name'),
+                            'itemmodule' => new external_value(PARAM_ALPHAEXT, 'Module type (quiz or assign)'),
+                            'percent' => new external_value(PARAM_INT, 'Learner grade as 0-100 percent; 0 when ungraded'),
+                        ]),
+                        'Quiz and assignment grade items for this course'
+                    ),
+                    'attendance_percent' => new external_value(PARAM_INT,
+                        'Attendance percent 0-100; null when mod_attendance absent or no logged sessions',
+                        VALUE_OPTIONAL, null, NULL_ALLOWED),
                 ]),
                 'Enrolled courses not yet completed'
             ),
