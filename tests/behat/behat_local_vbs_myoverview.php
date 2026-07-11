@@ -183,6 +183,31 @@ class behat_local_vbs_myoverview extends behat_base {
             'enrolenddate'   => 0,
             'password'       => '', // Password does not block eligibility, but keep it open.
         ]);
+
+        // VBS-319: also seed vbs_course_settings so local_vbs_enrol_get_courses
+        // (JOINed by catalog_register.js) returns this course as open for self-registration.
+        $now = time();
+        $existing = $DB->get_record('vbs_course_settings', ['courseid' => $course->id]);
+        if ($existing) {
+            $DB->update_record('vbs_course_settings', (object)[
+                'id'             => $existing->id,
+                'enroltype'      => 'self',
+                'enrolstartdate' => $now - DAYSECS,
+                'enrolenddate'   => $now + (30 * DAYSECS),
+                'timemodified'   => $now,
+            ]);
+        } else {
+            $DB->insert_record('vbs_course_settings', [
+                'courseid'       => $course->id,
+                'enroltype'      => 'self',
+                'enrolstartdate' => $now - DAYSECS,
+                'enrolenddate'   => $now + (30 * DAYSECS),
+                'maxstudents'    => 0,
+                'enrolled_count' => 0,
+                'timecreated'    => $now,
+                'timemodified'   => $now,
+            ]);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────
