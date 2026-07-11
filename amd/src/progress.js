@@ -358,12 +358,14 @@ export const init = (config) => {
             renderSection(sections.certificates, 'progress_section_certificates',
                 buildCertificatesContext(data.certificates)),
         ]);
-    // Fire-and-forget: Notification.exception returns a Promise that resolves only
-    // when the user closes the error modal. Passing it directly to .catch() chains
-    // that Promise, which blocks finally() — so pending.resolve() never fires in
-    // Behat (nobody clicks OK), causing wait_for_pending_js to time out after 10 s.
-    // Wrapping it discards the return value so finally() fires as soon as the WS fails.
-    }).catch((err) => { Notification.exception(err); }).finally(() => pending.resolve());
+    // Use console.error instead of Notification.exception: a WS rejection here is a
+    // security gate (cross-user read blocked by required_capability_exception) — not a
+    // user-visible error. More importantly, Notification.exception opens a modal that
+    // creates its own internal Pending resolved only when the user clicks OK, which
+    // blocks wait_for_pending_js() indefinitely in headless Behat (nobody clicks OK).
+    // eslint-disable-next-line no-console
+    }).catch((err) => { console.error('[local_vbs_myoverview/progress] WS error:', err); })
+    .finally(() => pending.resolve());
 };
 
 /**

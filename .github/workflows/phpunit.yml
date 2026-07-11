@@ -44,6 +44,7 @@ jobs:
         with:
           repository: vbsqldaotao/local-vbs-plan
           token: ${{ secrets.CI_CLONE_TOKEN }}
+          ref: ${{ matrix.moodle-branch }}
           path: extra-plugins/local_vbs_plan
 
       # mod_customcert provides customcert / customcert_issues tables required by
