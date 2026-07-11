@@ -215,6 +215,7 @@ jobs:
             echo "\$CFG->behat_prefix   = 'bht_';"
             echo "\$CFG->behat_dataroot = '$BEHAT_DATA';"
             echo "\$CFG->behat_wwwroot  = 'http://$BEHAT_HOST:8000';"
+            echo "\$CFG->behat_increasetimeout = 3;"
             echo "\$CFG->behat_profiles = ["
             echo "  'default' => ["
             echo "    'browser' => 'chrome',"
