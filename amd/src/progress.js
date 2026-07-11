@@ -358,7 +358,12 @@ export const init = (config) => {
             renderSection(sections.certificates, 'progress_section_certificates',
                 buildCertificatesContext(data.certificates)),
         ]);
-    }).catch(Notification.exception).finally(() => pending.resolve());
+    // Fire-and-forget: Notification.exception returns a Promise that resolves only
+    // when the user closes the error modal. Passing it directly to .catch() chains
+    // that Promise, which blocks finally() — so pending.resolve() never fires in
+    // Behat (nobody clicks OK), causing wait_for_pending_js to time out after 10 s.
+    // Wrapping it discards the return value so finally() fires as soon as the WS fails.
+    }).catch((err) => { Notification.exception(err); }).finally(() => pending.resolve());
 };
 
 /**

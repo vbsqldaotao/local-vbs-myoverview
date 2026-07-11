@@ -848,12 +848,7 @@ class behat_local_vbs_myoverview extends behat_base {
         $user = $DB->get_record('user', ['username' => $username], 'id', MUST_EXIST);
         $url  = new \moodle_url('/local/vbs_myoverview/progress.php', ['userid' => $user->id]);
         $this->getSession()->visit($this->locate_path($url->out_as_local_url(false)));
-        // Do NOT call wait_for_pending_js() here: when the cross-user WS call fails,
-        // Notification.exception() is async and returns a Promise that only resolves when
-        // the user closes the error modal. The finally(() => pending.resolve()) in
-        // progress.js therefore blocks on that Promise — so pending.resolve() never fires
-        // in a Behat run where nobody clicks OK, and wait_for_pending_js() times out after
-        // 10 s. The assertion step uses spin() to detect the modal instead.
+        $this->wait_for_pending_js();
     }
 
     /**
@@ -1034,22 +1029,15 @@ class behat_local_vbs_myoverview extends behat_base {
      *
      * When the WS rejects before renderSection() is called (e.g. a required_capability_exception
      * on a cross-user read — AC-08), the AMD module's .then() callback is skipped and no section
-     * ever gets aria-busy="false".
+     * ever gets aria-busy="false". This step verifies the violation cannot leak data.
      *
-     * We cannot use wait_for_pending_js() here: Notification.exception() is async, and its
-     * returned Promise only resolves when the user closes the error modal. In a headless Behat
-     * run nobody clicks OK, so pending.resolve() in progress.js never fires and
-     * wait_for_pending_js() times out. We also cannot spin until the modal appears because
-     * Moodle 4.4 in Behat may render the notification with non-standard CSS that our selectors
-     * miss. Instead we sleep a conservative 12 s — enough for the WS round-trip in CI — then
-     * assert that no section has settled to aria-busy="false".
+     * wait_for_pending_js() is called first so the Moodle pending queue (including the WS
+     * request and the subsequent .catch()) has finished before we check.
      *
      * @Then all learning progress sections remain in skeleton state
      */
     public function all_learning_progress_sections_remain_in_skeleton_state(): void {
-        // Sleep to allow the WS AJAX call to fire and fail before we check the DOM.
-        // 12 s is conservative; the WS round-trip in CI is typically < 3 s.
-        sleep(12);
+        $this->wait_for_pending_js();
 
         $anySettled = $this->evaluate_script(
             '!!document.querySelector(\'[data-region="learning-progress"] [data-region="section"][aria-busy="false"]\')'
