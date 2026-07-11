@@ -86,9 +86,10 @@ jobs:
             --db-user moodle \
             --db-pass moodle \
             --db-name moodle \
-            --db-port 5432 \
-            --moodle-branch "${{ matrix.moodle-branch }}" \
-            --db "${{ matrix.db }}"
+            --db-port 5432
+        env:
+          DB: ${{ matrix.db }}
+          MOODLE_BRANCH: ${{ matrix.moodle-branch }}
 
       - name: PHPUnit
         run: moodle-plugin-ci phpunit --coverage-text
