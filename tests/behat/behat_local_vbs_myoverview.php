@@ -771,9 +771,6 @@ class behat_local_vbs_myoverview extends behat_local_vbs_enrol {
     // registered as a Behat context (i.e. when enrol is not a top-level suite).
     // -----------------------------------------------------------------------
 
-    /**
-     * @Given :username has a pending registration for course :shortname
-     */
     public function user_has_pending_registration_for_course(string $username, string $shortname): void {
         parent::user_has_pending_registration_for_course($username, $shortname);
     }
@@ -781,8 +778,6 @@ class behat_local_vbs_myoverview extends behat_local_vbs_enrol {
     /**
      * Pre-stub window.confirm before an action that will trigger it.
      * Must be called BEFORE the action that opens the native confirm dialog.
-     *
-     * @Given I will confirm any dialogs
      */
     public function i_will_confirm_any_dialogs(): void {
         parent::i_will_confirm_any_dialogs();
@@ -792,8 +787,6 @@ class behat_local_vbs_myoverview extends behat_local_vbs_enrol {
      * Stub local_vbs_exam_enrol_course WS to return a mock pending success.
      * Uses M.util.js_pending/js_complete + setTimeout(0) so wait_for_pending_js()
      * blocks until the entire handleRegister async chain completes (TC-05).
-     *
-     * @Given I stub the VBS exam registration WS to succeed
      */
     public function i_stub_vbs_exam_registration_ws(): void {
         parent::i_stub_vbs_exam_registration_ws();
