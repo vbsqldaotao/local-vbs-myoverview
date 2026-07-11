@@ -50,6 +50,13 @@ class export_schedule_ics extends external_api {
                 VALUE_DEFAULT, 0),
             'session_type' => new external_value(PARAM_ALPHANUMEXT, 'Filter: facetoface | quiz | vbs_exam | "" = all',
                 VALUE_DEFAULT, ''),
+            'year'         => new external_value(PARAM_INT,
+                'Calendar year (e.g. 2026). When combined with month, sets the date range to that calendar month. '
+                . 'Ignored when date_from / date_to are provided explicitly.',
+                VALUE_DEFAULT, 0),
+            'month'        => new external_value(PARAM_INT,
+                'Calendar month 1–12. Used together with year to scope the export to one calendar month.',
+                VALUE_DEFAULT, 0),
         ]);
     }
 
@@ -60,13 +67,17 @@ class export_schedule_ics extends external_api {
      * @param int    $date_to
      * @param int    $course_id
      * @param string $session_type
+     * @param int    $year
+     * @param int    $month
      * @return array{ics_base64: string, filename: string}
      */
     public static function execute(
         int    $date_from    = 0,
         int    $date_to      = 0,
         int    $course_id    = 0,
-        string $session_type = ''
+        string $session_type = '',
+        int    $year         = 0,
+        int    $month        = 0
     ): array {
         global $USER;
 
@@ -75,7 +86,18 @@ class export_schedule_ics extends external_api {
             'date_to'      => $date_to,
             'course_id'    => $course_id,
             'session_type' => $session_type,
+            'year'         => $year,
+            'month'        => $month,
         ]);
+
+        // When the frontend sends {year, month} for a calendar-month export, compute the
+        // Unix timestamp range for that month. Explicit date_from/date_to take precedence.
+        if ($params['year'] > 0 && $params['month'] >= 1 && $params['month'] <= 12
+                && $params['date_from'] === 0 && $params['date_to'] === 0) {
+            $params['date_from'] = mktime(0, 0, 0, $params['month'], 1, $params['year']);
+            $params['date_to']   = mktime(23, 59, 59, $params['month'],
+                (int)date('t', $params['date_from']), $params['year']);
+        }
 
         $context = \context_user::instance($USER->id);
         self::validate_context($context);
