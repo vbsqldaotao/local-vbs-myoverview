@@ -763,36 +763,6 @@ class behat_local_vbs_myoverview extends behat_local_vbs_enrol {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // VBS-214 — Catalog CTA steps (/course/index.php)
-    // ─────────────────────────────────────────────────────────────
-
-    /**
-     * Wait for catalog_register.js to finish fetching and appending CTAs.
-     *
-     * The module calls local_vbs_enrol_get_courses via AJAX then iterates over
-     * every .coursebox. We wait for JS to quiesce, then up to 10 s for the
-     * first [data-testid] element (button or badge) to appear.
-     *
-     * @Given I wait for the VBS catalog CTAs to load
-     */
-    public function i_wait_for_the_vbs_catalog_ctas_to_load(): void {
-        $this->wait_for_pending_js();
-
-        $found = $this->getSession()->wait(
-            10000,
-            "document.querySelector('[data-testid]') !== null"
-        );
-
-        if (!$found) {
-            throw new \Exception(
-                'VBS catalog CTAs did not appear within 10 s. '
-                . 'Verify that local_vbs_enrol_get_courses WS returned data and '
-                . 'catalog_register.js ran without console errors.'
-            );
-        }
-    }
-
     /**
      * Create a pending VBS registration for an arbitrary user on a course.
      *
