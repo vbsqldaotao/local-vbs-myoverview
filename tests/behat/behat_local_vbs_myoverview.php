@@ -185,8 +185,18 @@ class behat_local_vbs_myoverview extends behat_base {
         ]);
 
         // VBS-319: also seed vbs_course_settings so local_vbs_enrol_get_courses
-        // (JOINed by catalog_register.js) returns this course as open for self-registration.
+        // (SELECT-ed by catalog_register.js) includes this course.
         $now = time();
+
+        // Count active Moodle enrolments to keep enrolled_count consistent.
+        $activeenrolled = (int) $DB->count_records_sql(
+            "SELECT COUNT(DISTINCT ue.userid)
+               FROM {user_enrolments} ue
+               JOIN {enrol} e ON e.id = ue.enrolid AND e.courseid = :courseid
+              WHERE ue.status = :active",
+            ['courseid' => $course->id, 'active' => ENROL_USER_ACTIVE]
+        );
+
         $existing = $DB->get_record('vbs_course_settings', ['courseid' => $course->id]);
         if ($existing) {
             $DB->update_record('vbs_course_settings', (object)[
@@ -194,6 +204,7 @@ class behat_local_vbs_myoverview extends behat_base {
                 'enroltype'      => 'self',
                 'enrolstartdate' => $now - DAYSECS,
                 'enrolenddate'   => $now + (30 * DAYSECS),
+                'enrolled_count' => $activeenrolled,
                 'timemodified'   => $now,
             ]);
         } else {
@@ -203,10 +214,38 @@ class behat_local_vbs_myoverview extends behat_base {
                 'enrolstartdate' => $now - DAYSECS,
                 'enrolenddate'   => $now + (30 * DAYSECS),
                 'maxstudents'    => 0,
-                'enrolled_count' => 0,
+                'enrolled_count' => $activeenrolled,
                 'timecreated'    => $now,
                 'timemodified'   => $now,
             ]);
+        }
+
+        // VBS-319 blocker fix (arch-reviewer): mirror active Moodle enrolments into
+        // vbs_course_registration so catalog_register.js sees user_status='active'
+        // and does NOT inject a register button for already-enrolled users.
+        // Without this, scenario :40 (ENROLLED-TEST + sv001) would regress: WS
+        // returns the course (now vbs_course_settings exists) but user_status=null
+        // → canRegister=true → button injected → "does not show register button" FAIL.
+        $enrolments = enrol_get_course_users($course->id, true); // active enrolments only
+        foreach ($enrolments as $u) {
+            $reg = $DB->get_record('vbs_course_registration',
+                ['userid' => $u->id, 'courseid' => $course->id]);
+            if ($reg) {
+                $DB->update_record('vbs_course_registration', (object)[
+                    'id'           => $reg->id,
+                    'status'       => 'active',
+                    'timemodified' => $now,
+                ]);
+            } else {
+                $DB->insert_record('vbs_course_registration', [
+                    'userid'       => $u->id,
+                    'courseid'     => $course->id,
+                    'status'       => 'active',
+                    'enrolled_at'  => $now,
+                    'timecreated'  => $now,
+                    'timemodified' => $now,
+                ]);
+            }
         }
     }
 
