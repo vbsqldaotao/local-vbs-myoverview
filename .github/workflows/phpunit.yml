@@ -53,6 +53,7 @@ jobs:
         with:
           repository: vbsqldaotao/mod-customcert
           token: ${{ secrets.CI_CLONE_TOKEN }}
+          ref: ${{ matrix.moodle-branch }}
           path: extra-plugins/mod_customcert
 
       - name: Setup PHP ${{ matrix.php }}
