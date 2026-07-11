@@ -848,7 +848,12 @@ class behat_local_vbs_myoverview extends behat_base {
         $user = $DB->get_record('user', ['username' => $username], 'id', MUST_EXIST);
         $url  = new \moodle_url('/local/vbs_myoverview/progress.php', ['userid' => $user->id]);
         $this->getSession()->visit($this->locate_path($url->out_as_local_url(false)));
-        $this->wait_for_pending_js();
+        // Do NOT call wait_for_pending_js() here: when the cross-user WS call fails,
+        // Notification.exception() is async and returns a Promise that only resolves when
+        // the user closes the error modal. The finally(() => pending.resolve()) in
+        // progress.js therefore blocks on that Promise — so pending.resolve() never fires
+        // in a Behat run where nobody clicks OK, and wait_for_pending_js() times out after
+        // 10 s. The assertion step uses spin() to detect the modal instead.
     }
 
     /**
@@ -1029,33 +1034,52 @@ class behat_local_vbs_myoverview extends behat_base {
      *
      * When the WS rejects before renderSection() is called (e.g. a required_capability_exception
      * on a cross-user read — AC-08), the AMD module's .then() callback is skipped and no section
-     * ever gets aria-busy="false". This step verifies the violation cannot leak data.
+     * ever gets aria-busy="false". Moodle's Notification.exception() opens an error modal that
+     * confirms the rejection; we spin until that modal is visible.
      *
-     * wait_for_pending_js() is called first so the Moodle pending queue (including the WS
-     * request and the subsequent .catch()) has finished before we check.
+     * NOTE: we intentionally skip wait_for_pending_js() here. Notification.exception is async
+     * and its returned Promise only resolves when the user closes the modal, so pending.resolve()
+     * in progress.js never fires in a headless Behat run. Using spin() to detect the modal
+     * avoids the 10 s pending-JS timeout that would otherwise fail the step.
      *
      * @Then all learning progress sections remain in skeleton state
      */
     public function all_learning_progress_sections_remain_in_skeleton_state(): void {
-        $this->wait_for_pending_js();
+        // Spin until the Moodle error dialog/alert is visible — that confirms the WS rejected
+        // the cross-user request. If instead a section settles (aria-busy="false"), the WS
+        // somehow succeeded, which is an AC-08 violation.
+        $this->spin(function() {
+            // A section settling to aria-busy="false" means the WS call succeeded — violation.
+            $anySettled = $this->evaluate_script(
+                '!!document.querySelector(\'[data-region="learning-progress"] [data-region="section"][aria-busy="false"]\')'
+            );
+            if ($anySettled) {
+                throw new ExpectationException(
+                    'At least one learning-progress section settled to aria-busy="false". '
+                    . 'The cross-user WS call must have succeeded, which violates AC-08.',
+                    $this->getSession()
+                );
+            }
 
-        $anySettled = $this->evaluate_script(
-            '(function() {'
-            . '  var secs = document.querySelectorAll(\'[data-region="learning-progress"] [data-region="section"]\');'
-            . '  for (var i = 0; i < secs.length; i++) {'
-            . '    if (secs[i].getAttribute("aria-busy") === "false") { return true; }'
-            . '  }'
-            . '  return false;'
-            . '})()'
-        );
+            // Moodle 4.x Bootstrap modal opened by Notification.exception().
+            // The modal gains class "show" when fully visible (Bootstrap 4/5).
+            // Also check .alert-danger for non-modal notification renders.
+            $errorVisible = $this->evaluate_script(
+                '!!(document.querySelector(".modal.show[role=\'dialog\']")'
+                . ' || document.querySelector(".alert.alert-danger")'
+                . ' || document.querySelector("[data-region=\'notification-area\'] .alert-danger")'
+                . ')'
+            );
+            if ($errorVisible) {
+                // Error notification confirmed — WS correctly rejected the cross-user read.
+                return true;
+            }
 
-        if ($anySettled) {
             throw new ExpectationException(
-                'At least one learning-progress section settled to aria-busy="false". '
-                . 'The cross-user WS call must have succeeded, which violates AC-08.',
+                'Waiting for Moodle error notification after cross-user WS rejection (AC-08)…',
                 $this->getSession()
             );
-        }
+        });
     }
 
 }
