@@ -32,10 +32,22 @@ use Behat\Mink\Exception\ExpectationException;
 
 // phpcs:disable moodle.NamingConventions.ValidFunctionName.LowercaseMethod
 
+// Pull in enrol step definitions (registration open/closed, pending/active status,
+// slot caps) so they are all available inside the theme_vbs Behat suite via the
+// behat_theme_vbs extends behat_local_vbs_myoverview chain.
+// Use __DIR__ (absolute path of this file's directory) rather than $GLOBALS['CFG']->dirroot
+// because Behat's ClassResolver loads context files before Moodle bootstrap completes,
+// so $CFG is not yet available at this point.
+require_once(__DIR__ . '/../../../vbs_enrol/tests/behat/behat_local_vbs_enrol.php');
+
 /**
- * Step definitions for local_vbs_myoverview.
+ * Step definitions for local_vbs_myoverview and the theme_vbs Behat suite.
+ *
+ * Extends behat_local_vbs_enrol so that enrol setup steps (registration open,
+ * pending/active registrations, slot caps) are all usable from theme_vbs
+ * feature files without duplication.
  */
-class behat_local_vbs_myoverview extends behat_base {
+class behat_local_vbs_myoverview extends behat_local_vbs_enrol {
 
     // ─────────────────────────────────────────────────────────────
     // Data setup steps
@@ -749,5 +761,104 @@ class behat_local_vbs_myoverview extends behat_base {
                 $this->getSession()
             );
         }
+    }
+
+    /**
+     * Create a pending VBS registration for an arbitrary user on a course.
+     *
+     * Generic counterpart to learner1_has_pending_registration() that takes a
+     * username parameter — needed by vbs_f03_catalog_register.feature TC-02.
+     *
+     * @Given :username has a pending registration for course :shortname
+     */
+    public function user_has_pending_registration_for_course(string $username, string $shortname): void {
+        global $DB;
+        $user   = $DB->get_record('user', ['username' => $username], '*', MUST_EXIST);
+        $course = $DB->get_record('course', ['shortname' => $shortname], '*', MUST_EXIST);
+
+        if (!$DB->record_exists('vbs_course_settings', ['courseid' => $course->id])) {
+            $DB->insert_record('vbs_course_settings', [
+                'courseid'       => $course->id,
+                'enroltype'      => 'manual',
+                'enrolstartdate' => 0,
+                'enrolenddate'   => 0,
+                'maxstudents'    => 0,
+                'enrolled_count' => 0,
+                'timecreated'    => time(),
+                'timemodified'   => time(),
+            ]);
+        }
+
+        $existing = $DB->get_record('vbs_course_registration', [
+            'userid'   => $user->id,
+            'courseid' => $course->id,
+        ]);
+        $now = time();
+        if ($existing) {
+            $DB->set_field('vbs_course_registration', 'status', 'pending', ['id' => $existing->id]);
+            $DB->set_field('vbs_course_registration', 'timemodified', $now, ['id' => $existing->id]);
+        } else {
+            $DB->insert_record('vbs_course_registration', [
+                'courseid'     => $course->id,
+                'userid'       => $user->id,
+                'status'       => 'pending',
+                'enrolled_at'  => $now,
+                'timecreated'  => $now,
+                'timemodified' => $now,
+            ]);
+        }
+    }
+
+    /**
+     * Stub the VBS exam course-registration WS so the next call resolves with
+     * success without hitting the real backend (TC-05).
+     *
+     * Patches both fetch() and XMLHttpRequest so the stub works regardless of
+     * which transport Moodle's Ajax.call() uses in this Moodle version.
+     *
+     * @Given I stub the VBS exam registration WS to succeed
+     */
+    public function i_stub_the_vbs_exam_registration_ws_to_succeed(): void {
+        $js = <<<'ENDJS'
+(function() {
+    var _origFetch = window.fetch;
+    window.fetch = function(url, opts) {
+        try {
+            var body = (opts && typeof opts.body === 'string') ? opts.body : '';
+            if (body.indexOf('local_vbs_exam_enrol_course') !== -1) {
+                return Promise.resolve(new Response(
+                    JSON.stringify([{"error":false,"data":{"success":true}}]),
+                    {status:200, headers:{"Content-Type":"application/json"}}
+                ));
+            }
+        } catch(e) {}
+        return _origFetch.apply(this, arguments);
+    };
+    var _XHR = window.XMLHttpRequest;
+    window.XMLHttpRequest = function() {
+        var xhr = new _XHR();
+        var _open = xhr.open.bind(xhr);
+        var _send = xhr.send.bind(xhr);
+        xhr.open = function() { return _open.apply(this, arguments); };
+        xhr.send = function(data) {
+            if (typeof data === 'string' && data.indexOf('local_vbs_exam_enrol_course') !== -1) {
+                var self = this;
+                Object.defineProperty(self, 'readyState',   {get:function(){return 4;}});
+                Object.defineProperty(self, 'status',       {get:function(){return 200;}});
+                Object.defineProperty(self, 'responseText', {
+                    get:function(){
+                        return JSON.stringify([{"error":false,"data":{"success":true}}]);
+                    }
+                });
+                setTimeout(function(){ self.onreadystatechange && self.onreadystatechange(); }, 0);
+                return;
+            }
+            return _send.apply(this, arguments);
+        };
+        return xhr;
+    };
+})();
+ENDJS;
+        $this->getSession()->executeScript($js);
     }
 }
