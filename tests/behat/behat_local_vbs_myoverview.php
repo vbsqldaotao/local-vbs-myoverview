@@ -814,4 +814,248 @@ class behat_local_vbs_myoverview extends behat_base {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // F02: Learning progress page — navigation and assertion steps
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Navigate to the F02 learning progress page using bundled mock data (?vbsmock=1).
+     *
+     * Mock mode bypasses the real WS so the test harness does not require
+     * local_vbs_plan or mod_customcert to be installed.
+     *
+     * @When I am on the learning progress page in mock mode
+     */
+    public function i_am_on_the_learning_progress_page_in_mock_mode(): void {
+        $url = new \moodle_url('/local/vbs_myoverview/progress.php', ['vbsmock' => 1]);
+        $this->getSession()->visit($this->locate_path($url->out_as_local_url(false)));
+        $this->wait_for_pending_js();
+    }
+
+    /**
+     * Navigate to the learning progress page for another user identified by username.
+     *
+     * Used for AC-08: the WS enforces capability checks, so a cross-user read by a
+     * student (no moodle/user:viewdetails) causes the WS to reject and sections remain
+     * in skeleton state.
+     *
+     * @When I am on the learning progress page for user :username
+     *
+     * @param string $username target user's Moodle username
+     */
+    public function i_am_on_the_learning_progress_page_for_user(string $username): void {
+        global $DB;
+        $user = $DB->get_record('user', ['username' => $username], 'id', MUST_EXIST);
+        $url  = new \moodle_url('/local/vbs_myoverview/progress.php', ['userid' => $user->id]);
+        $this->getSession()->visit($this->locate_path($url->out_as_local_url(false)));
+        $this->wait_for_pending_js();
+    }
+
+    /**
+     * Spin until the named learning-progress section clears aria-busy="false".
+     *
+     * The AMD module sets aria-busy="false" in the finally block of renderSection(),
+     * whether the section rendered successfully or showed an inline error. If the WS
+     * itself rejects (e.g. AC-08), renderSection is never called and sections stay
+     * at aria-busy="true"; use `all learning progress sections remain in skeleton state`
+     * for that case.
+     *
+     * @When the learning progress section :section is loaded
+     *
+     * @param string $section one of: plan | active | completed | certificates
+     */
+    public function the_learning_progress_section_is_loaded(string $section): void {
+        $selector = '[data-region="section"][data-section="' . addslashes($section) . '"]';
+        $this->spin(function() use ($selector) {
+            $ready = $this->evaluate_script(
+                '(function() {'
+                . '  var s = document.querySelector(' . json_encode($selector) . ');'
+                . '  return !!(s && s.getAttribute("aria-busy") === "false");'
+                . '})()'
+            );
+            if (!$ready) {
+                throw new ExpectationException(
+                    "Learning progress section '$selector' still has aria-busy=\"true\" — not yet settled.",
+                    $this->getSession()
+                );
+            }
+            return true;
+        });
+    }
+
+    /**
+     * Assert that a given text string is visible inside the named learning-progress section.
+     *
+     * Spins to allow for asynchronous section hydration.
+     *
+     * @Then I should see :text in the :section learning progress section
+     *
+     * @param string $text    expected visible text
+     * @param string $section one of: plan | active | completed | certificates
+     */
+    public function i_should_see_in_the_learning_progress_section(string $text, string $section): void {
+        $this->spin(function() use ($text, $section) {
+            $sectionel = $this->find('css', '[data-region="section"][data-section="' . $section . '"]');
+            if ($sectionel === null || strpos($sectionel->getText(), $text) === false) {
+                throw new ExpectationException(
+                    "Text '$text' not found in the '$section' learning progress section.",
+                    $this->getSession()
+                );
+            }
+            return true;
+        });
+    }
+
+    /**
+     * Assert a Bootstrap progress bar (.progress) exists in the named section.
+     *
+     * Used by AC-01 to verify completion_percent is rendered as a bar, not just text.
+     *
+     * @Then the :section learning progress section contains a progress bar
+     *
+     * @param string $section one of: plan | active | completed | certificates
+     */
+    public function the_learning_progress_section_contains_a_progress_bar(string $section): void {
+        $this->spin(function() use ($section) {
+            $sectionel = $this->find('css', '[data-region="section"][data-section="' . $section . '"]');
+            $bar = $sectionel ? $sectionel->find('css', '.progress') : null;
+            if ($bar === null) {
+                throw new ExpectationException(
+                    "No .progress bar found in the '$section' learning progress section.",
+                    $this->getSession()
+                );
+            }
+            return true;
+        });
+    }
+
+    /**
+     * Assert a link with the given visible label exists in the named section.
+     *
+     * Used by AC-03 to verify the "View certificate" CTA is rendered for courses
+     * that have an issued certificate.
+     *
+     * @Then the :section learning progress section contains a :label link
+     *
+     * @param string $section one of: plan | active | completed | certificates
+     * @param string $label   visible link text to look for
+     */
+    public function the_learning_progress_section_contains_a_link(string $section, string $label): void {
+        $this->spin(function() use ($section, $label) {
+            $sectionel = $this->find('css', '[data-region="section"][data-section="' . $section . '"]');
+            if ($sectionel === null) {
+                throw new ExpectationException("Section '$section' not found.", $this->getSession());
+            }
+            $escaped = \behat_context_helper::escape($label);
+            $link = $sectionel->find('xpath',
+                '//a[normalize-space(text())=' . $escaped . ']'
+                . '|//a[normalize-space(.)=' . $escaped . ']');
+            if ($link === null) {
+                throw new ExpectationException(
+                    "No '$label' link found in the '$section' learning progress section.",
+                    $this->getSession()
+                );
+            }
+            return true;
+        });
+    }
+
+    /**
+     * Assert a "View certificate" link does NOT appear adjacent to a specific course name.
+     *
+     * Used by AC-03: a completed course without an issued cert must not show a cert link
+     * on its list item.
+     *
+     * @Then the :section learning progress section does not contain a :label link for :coursename
+     *
+     * @param string $section    one of: plan | active | completed | certificates
+     * @param string $label      link text whose absence is asserted (e.g. "View certificate")
+     * @param string $coursename course full name that must exist on the page without the link
+     */
+    public function the_learning_progress_section_does_not_contain_a_link_for(
+        string $section, string $label, string $coursename
+    ): void {
+        $this->wait_for_pending_js();
+        $sectionel = $this->find('css', '[data-region="section"][data-section="' . $section . '"]');
+        if ($sectionel === null) {
+            throw new ExpectationException("Section '$section' not found.", $this->getSession());
+        }
+        // Find the <li> for the course.
+        $escapedname = \behat_context_helper::escape($coursename);
+        $li = $sectionel->find('xpath',
+            '//li[.//*[normalize-space(text())=' . $escapedname . ']]');
+        if ($li === null) {
+            // The course is not listed at all — nothing to check for.
+            return;
+        }
+        $escapedlabel = \behat_context_helper::escape($label);
+        $link = $li->find('xpath',
+            '//a[normalize-space(text())=' . $escapedlabel . ']'
+            . '|//a[normalize-space(.)=' . $escapedlabel . ']');
+        if ($link !== null) {
+            throw new ExpectationException(
+                "Course '$coursename' in '$section' section should NOT have a '$label' link, but one was found.",
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * Assert .vbs-lp-plan-item elements exist inside the named section.
+     *
+     * Used by AC-04 to verify the training plan items are rendered (not just the empty state).
+     *
+     * @Then the :section learning progress section contains plan items
+     *
+     * @param string $section should be "plan"
+     */
+    public function the_learning_progress_section_contains_plan_items(string $section): void {
+        $this->spin(function() use ($section) {
+            $sectionel = $this->find('css', '[data-region="section"][data-section="' . $section . '"]');
+            $items = $sectionel ? $sectionel->findAll('css', '.vbs-lp-plan-item') : [];
+            if (empty($items)) {
+                throw new ExpectationException(
+                    "No .vbs-lp-plan-item elements found in the '$section' section — "
+                    . "plan may still be loading or returned empty.",
+                    $this->getSession()
+                );
+            }
+            return true;
+        });
+    }
+
+    /**
+     * Assert that all four learning-progress sections are still showing the skeleton loader.
+     *
+     * When the WS rejects before renderSection() is called (e.g. a required_capability_exception
+     * on a cross-user read — AC-08), the AMD module's .then() callback is skipped and no section
+     * ever gets aria-busy="false". This step verifies the violation cannot leak data.
+     *
+     * wait_for_pending_js() is called first so the Moodle pending queue (including the WS
+     * request and the subsequent .catch()) has finished before we check.
+     *
+     * @Then all learning progress sections remain in skeleton state
+     */
+    public function all_learning_progress_sections_remain_in_skeleton_state(): void {
+        $this->wait_for_pending_js();
+
+        $anySettled = $this->evaluate_script(
+            '(function() {'
+            . '  var secs = document.querySelectorAll(\'[data-region="learning-progress"] [data-region="section"]\');'
+            . '  for (var i = 0; i < secs.length; i++) {'
+            . '    if (secs[i].getAttribute("aria-busy") === "false") { return true; }'
+            . '  }'
+            . '  return false;'
+            . '})()'
+        );
+
+        if ($anySettled) {
+            throw new ExpectationException(
+                'At least one learning-progress section settled to aria-busy="false". '
+                . 'The cross-user WS call must have succeeded, which violates AC-08.',
+                $this->getSession()
+            );
+        }
+    }
+
 }
