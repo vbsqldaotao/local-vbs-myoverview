@@ -58,7 +58,7 @@ Feature: Learner views the course list — core block_myoverview (F01)
     Given I log in as "sv001"
     And I am on the VBS course list page
     When I search courses for "xyz_khong_ton_tai_99999"
-    Then I should see "No courses"
+    Then I should see the course search no-result message
 
   Scenario: FR-F01-002 – Xóa từ khóa – khôi phục danh sách đầy đủ
     Given I log in as "sv001"
