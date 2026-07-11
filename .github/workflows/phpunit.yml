@@ -27,8 +27,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        moodle-branch: ['MOODLE_404_STABLE']
-        php: ['8.1']
+        moodle-branch: ['MOODLE_502_STABLE']
+        php: ['8.2']
         db: ['pgsql']
 
     steps:
@@ -39,12 +39,13 @@ jobs:
 
       # local_vbs_plan provides vbs_plan_year / vbs_plan_item tables required by
       # build_training_plan() — without it every call returns null in PHPUnit.
+      # Pinned to main: local-vbs-plan has no MOODLE_502_STABLE branch.
       - name: Checkout local-vbs-plan
         uses: actions/checkout@v4
         with:
           repository: vbsqldaotao/local-vbs-plan
           token: ${{ secrets.CI_CLONE_TOKEN }}
-          ref: ${{ matrix.moodle-branch }}
+          ref: main
           path: extra-plugins/local_vbs_plan
 
       # mod_customcert provides customcert / customcert_issues tables required by

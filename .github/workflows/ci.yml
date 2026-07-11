@@ -16,7 +16,7 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.1'
+          php-version: '8.2'
           tools: none
           coverage: none
 
@@ -30,11 +30,11 @@ jobs:
           php -l version.php >/dev/null || FAIL=1
           [ "$FAIL" -eq 0 ] && echo "PHP lint passed" || { echo "PHP lint FAILED"; exit 1; }
 
-  # ── PHPUnit on Moodle 4.4 ──────────────────────────────────────────────────
+  # ── PHPUnit on Moodle 5.2 ──────────────────────────────────────────────────
   # moodlehq/moodle-plugin-ci ^4 depends on moodlehq/moodle-local_ci which is
   # not on Packagist. We set up Moodle directly to avoid that broken dependency.
   phpunit:
-    name: PHPUnit (Moodle 4.4 / PHP 8.1)
+    name: PHPUnit (Moodle 5.2 / PHP 8.2)
     runs-on: ubuntu-22.04
 
     env:
@@ -63,14 +63,14 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.1'
+          php-version: '8.2'
           extensions: pgsql, zip, gd, curl, soap, intl, mbstring, xml
           ini-values: max_input_vars=5000
           coverage: none
 
-      - name: Clone Moodle 4.4 (shallow)
+      - name: Clone Moodle 5.2 (shallow)
         run: |
-          git clone --depth=1 --branch MOODLE_404_STABLE \
+          git clone --depth=1 --branch MOODLE_502_STABLE \
             https://github.com/moodle/moodle.git $MOODLE_ROOT
 
       - name: Place plugin under local/vbs_myoverview
@@ -132,7 +132,7 @@ jobs:
   #      (e.g. courses_per_page). If pagination scenario runs with the default
   #      page size, load-more will not appear. Fix the fixture key accordingly.
   behat:
-    name: Behat (Moodle 4.4 / PHP 8.1 / Chrome)
+    name: Behat (Moodle 5.2 / PHP 8.2 / Chrome)
     runs-on: ubuntu-22.04
 
     env:
@@ -166,14 +166,14 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.1'
+          php-version: '8.2'
           extensions: pgsql, zip, gd, curl, soap, intl, mbstring, xml
           ini-values: max_input_vars=5000
           coverage: none
 
-      - name: Clone Moodle 4.4 (shallow)
+      - name: Clone Moodle 5.2 (shallow)
         run: |
-          git clone --depth=1 --branch MOODLE_404_STABLE \
+          git clone --depth=1 --branch MOODLE_502_STABLE \
             https://github.com/moodle/moodle.git $MOODLE_ROOT
 
       - name: Place plugin under local/vbs_myoverview
