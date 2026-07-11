@@ -344,6 +344,20 @@ export const init = (config) => {
     bindDownloads(root);
 
     const pending = new Pending('local_vbs_myoverview/progress:load');
+    // Safety net: if the WS XHR never settles (e.g. the CI single-threaded
+    // PHP built-in server is slow to respond), Moodle's wait_for_pending_js()
+    // — including the @AfterStep hook — would hang until the 30s Behat timeout.
+    // Resolve after 15 s regardless so Behat can proceed. The normal path via
+    // .finally() calls clearTimeout() first to avoid a double-resolve.
+    let pendingResolved = false;
+    const resolvePending = () => {
+        if (!pendingResolved) {
+            pendingResolved = true;
+            pending.resolve();
+        }
+    };
+    const safetyTimer = setTimeout(resolvePending, 15000);
+
     const sections = {};
     root.querySelectorAll(SELECTORS.SECTION).forEach((section) => {
         sections[section.dataset.section] = section;
@@ -365,7 +379,7 @@ export const init = (config) => {
     // blocks wait_for_pending_js() indefinitely in headless Behat (nobody clicks OK).
     // eslint-disable-next-line no-console
     }).catch((err) => { console.error('[local_vbs_myoverview/progress] WS error:', err); })
-    .finally(() => pending.resolve());
+    .finally(() => { clearTimeout(safetyTimer); resolvePending(); });
 };
 
 /**
