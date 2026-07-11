@@ -331,6 +331,66 @@ final class get_schedule_test extends \advanced_testcase {
         $this->assertStringContainsString('END:VEVENT', $ics);
     }
 
+    /**
+     * ICS export via year/month params (frontend calendar style) scopes the date range.
+     *
+     * Regression for VBS-279: the frontend sends {year, month} but the original backend
+     * schema only accepted {date_from, date_to}, causing validate_parameters() to throw
+     * and the JS catch block to show "Không thể xuất lịch".
+     */
+    public function test_ics_export_year_month_params_compute_date_range(): void {
+        $this->resetAfterTest();
+        $gen    = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $user   = $gen->create_user();
+        $gen->enrol_user($user->id, $course->id);
+
+        // Create a quiz inside the target month (July 2026).
+        $july_start = mktime(0, 0, 0, 7, 1, 2026);
+        $gen->create_module('quiz', [
+            'course'    => $course->id,
+            'name'      => 'July quiz',
+            'timeopen'  => $july_start + HOURSECS,
+            'timeclose' => $july_start + 2 * HOURSECS,
+        ]);
+
+        // Create a quiz outside the target month (June 2026).
+        $june_start = mktime(0, 0, 0, 6, 1, 2026);
+        $gen->create_module('quiz', [
+            'course'    => $course->id,
+            'name'      => 'June quiz',
+            'timeopen'  => $june_start + HOURSECS,
+            'timeclose' => $june_start + 2 * HOURSECS,
+        ]);
+
+        $this->setUser($user);
+
+        // Call with year/month params (the way the frontend calls it).
+        $raw = export_schedule_ics::execute(0, 0, 0, '', 2026, 7);
+        $result = external_api::clean_returnvalue(export_schedule_ics::execute_returns(), $raw);
+
+        $this->assertNotEmpty($result['ics_base64']);
+        $ics = base64_decode($result['ics_base64']);
+        $this->assertStringContainsString('July quiz', $ics, 'July quiz must appear in July export');
+        $this->assertStringNotContainsString('June quiz', $ics, 'June quiz must be excluded from July export');
+    }
+
+    /**
+     * ICS export with year/month and no sessions returns a valid empty calendar.
+     */
+    public function test_ics_export_year_month_no_sessions_returns_empty_calendar(): void {
+        $this->resetAfterTest();
+        $user = $this->getDataGenerator()->create_user();
+        $this->setUser($user);
+
+        $raw = export_schedule_ics::execute(0, 0, 0, '', 2026, 7);
+        $result = external_api::clean_returnvalue(export_schedule_ics::execute_returns(), $raw);
+
+        $ics = base64_decode($result['ics_base64']);
+        $this->assertStringContainsString('BEGIN:VCALENDAR', $ics);
+        $this->assertStringNotContainsString('BEGIN:VEVENT', $ics);
+    }
+
     // -----------------------------------------------------------------------
     // Optional field absent in request/response
     // -----------------------------------------------------------------------
