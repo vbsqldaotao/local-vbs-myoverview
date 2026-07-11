@@ -35,7 +35,10 @@ use Behat\Mink\Exception\ExpectationException;
 // Pull in enrol step definitions (registration open/closed, pending/active status,
 // slot caps) so they are all available inside the theme_vbs Behat suite via the
 // behat_theme_vbs extends behat_local_vbs_myoverview chain.
-require_once($GLOBALS['CFG']->dirroot . '/local/vbs_enrol/tests/behat/behat_local_vbs_enrol.php');
+// Use __DIR__ (absolute path of this file's directory) rather than $GLOBALS['CFG']->dirroot
+// because Behat's ClassResolver loads context files before Moodle bootstrap completes,
+// so $CFG is not yet available at this point.
+require_once(__DIR__ . '/../../../vbs_enrol/tests/behat/behat_local_vbs_enrol.php');
 
 /**
  * Step definitions for local_vbs_myoverview and the theme_vbs Behat suite.
