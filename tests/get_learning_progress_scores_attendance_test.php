@@ -274,6 +274,62 @@ final class get_learning_progress_scores_attendance_test extends \advanced_testc
         $this->assertSame([], $result['active_courses'][0]['grade_items']);
     }
 
+    /**
+     * A scale-graded item (gradetype = 2) must not appear in grade_items — its
+     * finalgrade is a scale option id, not a numeric score, so a percent would
+     * be meaningless.
+     *
+     * @return void
+     */
+    public function test_scale_graded_item_excluded(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $now = time();
+        $gen = self::getDataGenerator();
+        $course = $gen->create_course(['startdate' => $now - DAYSECS]);
+        $user = $gen->create_user();
+        $gen->enrol_user($user->id, $course->id);
+
+        // gradetype = 2 (SCALE): finalgrade stores scale option id, not a numeric score.
+        $DB->insert_record('grade_items', (object)[
+            'courseid' => $course->id,
+            'itemtype' => 'mod',
+            'itemmodule' => 'assign',
+            'iteminstance' => 1,
+            'itemname' => 'Bài tập thang điểm',
+            'grademax' => 5.0,
+            'grademin' => 0.0,
+            'gradepass' => 0.0,
+            'scaleid' => 1,
+            'outcomeid' => null,
+            'gradetype' => 2,
+            'display' => 0,
+            'decimals' => null,
+            'hidden' => 0,
+            'locked' => 0,
+            'locktime' => 0,
+            'needsupdate' => 0,
+            'weightoverride' => 0,
+            'sortorder' => 1,
+            'timecreated' => $now,
+            'timemodified' => $now,
+            'itemnumber' => 0,
+            'calculation' => null,
+            'idnumber' => null,
+            'aggregationcoef' => 0,
+            'aggregationcoef2' => 0,
+            'plusfactor' => 0,
+            'multfactor' => 1.0,
+        ]);
+
+        $this->setUser($user);
+        $result = $this->call($user->id);
+
+        $this->assertCount(1, $result['active_courses']);
+        $this->assertSame([], $result['active_courses'][0]['grade_items'],
+            'Scale-graded items (gradetype=2) must be excluded from grade_items.');
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // attendance_percent edge cases
     // ─────────────────────────────────────────────────────────────────────────
@@ -342,5 +398,86 @@ final class get_learning_progress_scores_attendance_test extends \advanced_testc
 
         $this->assertCount(1, $result['active_courses']);
         $this->assertNull($result['active_courses'][0]['attendance_percent']);
+    }
+
+    /**
+     * Logs pointing to a soft-deleted attendance status (deleted = 1) must not
+     * be counted. The session total drops to zero → result is null.
+     *
+     * Requires mod_attendance tables; skipped on plain Moodle.
+     *
+     * @return void
+     */
+    public function test_attendance_percent_excludes_deleted_statuses(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $dbman = $DB->get_manager();
+        if (!$dbman->table_exists('attendance') || !$dbman->table_exists('attendance_sessions')
+            || !$dbman->table_exists('attendance_log') || !$dbman->table_exists('attendance_statuses')) {
+            $this->markTestSkipped('mod_attendance not installed; deleted-status path not exercisable.');
+        }
+
+        $now = time();
+        $gen = self::getDataGenerator();
+        $course = $gen->create_course(['startdate' => $now - DAYSECS]);
+        $user = $gen->create_user();
+        $gen->enrol_user($user->id, $course->id);
+
+        // Create attendance instance.
+        $attid = $DB->insert_record('attendance', (object)[
+            'course' => $course->id,
+            'name' => 'Test Attendance',
+            'intro' => '',
+            'introformat' => 0,
+            'grade' => 100,
+            'timemodified' => $now,
+        ]);
+
+        // Create a soft-deleted status (deleted = 1).
+        $statusid = $DB->insert_record('attendance_statuses', (object)[
+            'attendanceid' => $attid,
+            'acronym' => 'P',
+            'description' => 'Present',
+            'grade' => 2,
+            'deleted' => 1,
+            'setnumber' => 0,
+            'visible' => 1,
+            'availablebeforesession' => 0,
+            'setunmarked' => 0,
+        ]);
+
+        // Create a session and log the learner against the deleted status.
+        $sessionid = $DB->insert_record('attendance_sessions', (object)[
+            'attendanceid' => $attid,
+            'groupid' => 0,
+            'sessdate' => $now - HOURSECS,
+            'duration' => 3600,
+            'timemodified' => $now,
+            'description' => '',
+            'descriptionformat' => 0,
+            'studentscanmark' => 0,
+            'autoassignstatus' => 0,
+            'preventsharedip' => 0,
+            'preventsharediptime' => 0,
+            'statusset' => 0,
+        ]);
+        $DB->insert_record('attendance_log', (object)[
+            'sessionid' => $sessionid,
+            'studentid' => $user->id,
+            'statusid' => $statusid,
+            'timetaken' => $now,
+            'takenby' => 0,
+            'statusset' => 0,
+            'remarks' => '',
+        ]);
+
+        $this->setUser($user);
+        $result = $this->call($user->id);
+
+        $this->assertCount(1, $result['active_courses']);
+        // All logs point to a deleted status → the JOIN filters them out → total = 0 → null.
+        $this->assertNull($result['active_courses'][0]['attendance_percent'],
+            'Logs pointing to deleted attendance statuses must not inflate the total.');
     }
 }

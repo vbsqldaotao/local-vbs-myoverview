@@ -327,8 +327,10 @@ class get_learning_progress extends external_api {
     /**
      * Graded quiz and assignment items for a course, with the learner's current percent.
      *
-     * Only non-hidden items with grademax > 0 are returned. Items not yet graded
-     * have percent = 0.
+     * Only numeric (gradetype = 1) non-hidden items with grademax > 0 are returned.
+     * Scale-graded items (gradetype = 2) are excluded: their finalgrade stores the
+     * scale option id, not a numeric score, so a percent would be meaningless.
+     * Items not yet graded have percent = 0.
      *
      * @param int $courseid course id
      * @param int $userid learner id
@@ -343,6 +345,7 @@ class get_learning_progress extends external_api {
                  WHERE gi.courseid = :courseid
                    AND gi.itemtype = 'mod'
                    AND gi.itemmodule IN ('quiz', 'assign')
+                   AND gi.gradetype = 1
                    AND gi.grademax > 0
                    AND gi.hidden = 0
               ORDER BY gi.sortorder ASC";
@@ -371,7 +374,13 @@ class get_learning_progress extends external_api {
      * Returns null when mod_attendance tables are absent or the learner has no
      * logged sessions in the course.
      *
-     * Percent = sessions with a "present" (grade > 0) status / total logged sessions.
+     * "Attended" definition: any non-deleted status with grade > 0. In Moodle's
+     * default attendance setup this covers both "Present" (grade = 2) and "Late"
+     * (grade = 1). Both count as attended — BA decision: late attendance is valid
+     * for YCTK #10 điểm danh purposes. Deleted statuses (deleted = 1) are excluded
+     * to avoid counting stale log rows that pointed at a since-removed status.
+     *
+     * Percent = attended sessions / total logged sessions × 100, rounded.
      *
      * @param int $courseid course id
      * @param int $userid learner id
@@ -394,6 +403,7 @@ class get_learning_progress extends external_api {
                   JOIN {attendance_sessions} s ON s.attendanceid = att.id
                   JOIN {attendance_log} al ON al.sessionid = s.id AND al.studentid = :userid
                   JOIN {attendance_statuses} ast ON ast.id = al.statusid AND ast.attendanceid = att.id
+                                                AND ast.deleted = 0
                  WHERE att.course = :courseid";
         $rec = $DB->get_record_sql($sql, ['courseid' => $courseid, 'userid' => $userid]);
         if (!$rec || (int)$rec->total === 0) {
