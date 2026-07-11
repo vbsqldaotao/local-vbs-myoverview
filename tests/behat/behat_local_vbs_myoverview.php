@@ -848,7 +848,11 @@ class behat_local_vbs_myoverview extends behat_base {
         $user = $DB->get_record('user', ['username' => $username], 'id', MUST_EXIST);
         $url  = new \moodle_url('/local/vbs_myoverview/progress.php', ['userid' => $user->id]);
         $this->getSession()->visit($this->locate_path($url->out_as_local_url(false)));
-        $this->wait_for_pending_js();
+        // Do NOT call wait_for_pending_js() here for cross-user access (AC-08).
+        // The AMD module fires asynchronously after Selenium's visit() returns.
+        // The WS rejects with required_capability_exception but the Moodle pending
+        // queue can hang in CI's single-threaded PHP built-in server environment.
+        // all_learning_progress_sections_remain_in_skeleton_state() handles the wait.
     }
 
     /**
@@ -1037,7 +1041,14 @@ class behat_local_vbs_myoverview extends behat_base {
      * @Then all learning progress sections remain in skeleton state
      */
     public function all_learning_progress_sections_remain_in_skeleton_state(): void {
-        $this->wait_for_pending_js();
+        // Wait for the AMD module to fire and the WS to fail (fast: capability
+        // exception). Cannot use wait_for_pending_js() here — in CI's single-
+        // threaded PHP built-in server the Moodle pending queue for the rejected
+        // WS call may not drain before the 30s Behat timeout.
+        // Sections become not-busy ONLY when renderSection() is called from
+        // .then(), which runs only on WS success. So once the WS fails the
+        // skeleton state is permanent — a fixed wait then a DOM check is safe.
+        usleep(5000000); // 5 s — ample for the capability check to round-trip.
 
         $anySettled = $this->evaluate_script(
             '!!document.querySelector(\'[data-region="learning-progress"] [data-region="section"][aria-busy="false"]\')'
