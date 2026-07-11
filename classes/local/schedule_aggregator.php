@@ -109,6 +109,11 @@ class schedule_aggregator {
     ): array {
         global $DB;
 
+        // facetoface tables may not exist if mod_facetoface is not installed.
+        if (!$DB->get_manager()->table_exists('facetoface_signups')) {
+            return [];
+        }
+
         // facetoface_sessions has no location field in the core schema; location
         // is a custom field. We fall back to session details for description.
         // Join facetoface_signups_status to filter out cancelled/declined signups.
