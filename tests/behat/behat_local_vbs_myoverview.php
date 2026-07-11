@@ -32,22 +32,16 @@ use Behat\Mink\Exception\ExpectationException;
 
 // phpcs:disable moodle.NamingConventions.ValidFunctionName.LowercaseMethod
 
-// Pull in enrol step definitions (registration open/closed, pending/active status,
-// slot caps) so they are all available inside the theme_vbs Behat suite via the
-// behat_theme_vbs extends behat_local_vbs_myoverview chain.
-// Use __DIR__ (absolute path of this file's directory) rather than $GLOBALS['CFG']->dirroot
-// because Behat's ClassResolver loads context files before Moodle bootstrap completes,
-// so $CFG is not yet available at this point.
-require_once(__DIR__ . '/../../../vbs_enrol/tests/behat/behat_local_vbs_enrol.php');
-
 /**
- * Step definitions for local_vbs_myoverview and the theme_vbs Behat suite.
+ * Step definitions for local_vbs_myoverview.
  *
- * Extends behat_local_vbs_enrol so that enrol setup steps (registration open,
- * pending/active registrations, slot caps) are all usable from theme_vbs
- * feature files without duplication.
+ * Extends behat_base directly. Enrol step definitions (registration open,
+ * pending/active registrations, slot caps) are contributed by
+ * behat_local_vbs_enrol, which Moodle's Behat auto-discovery registers as a
+ * separate context when local_vbs_enrol is installed. All step definitions are
+ * discovered independently per context class — no inheritance chain needed.
  */
-class behat_local_vbs_myoverview extends behat_local_vbs_enrol {
+class behat_local_vbs_myoverview extends behat_base {
 
     // ─────────────────────────────────────────────────────────────
     // Data setup steps
