@@ -57,9 +57,9 @@ const PLAN_STATUS_KEY = {
 
 /** plan item status → Bootstrap badge class. */
 const PLAN_STATUS_CLASS = {
-    completed: 'badge-success',
-    in_progress: 'badge-warning',
-    not_started: 'badge-secondary',
+    completed: 'bg-success text-white',
+    in_progress: 'bg-warning text-dark',
+    not_started: 'bg-secondary text-white',
 };
 
 /**
