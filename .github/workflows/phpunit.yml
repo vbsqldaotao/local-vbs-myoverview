@@ -60,6 +60,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: pgsql, zip, gd, soap, xmlrpc, intl
+          ini-values: max_input_vars=5000
           coverage: none
 
       - name: Cache Composer dependencies
