@@ -14,8 +14,8 @@ jobs:
       postgres:
         image: postgres:14
         env:
-          POSTGRES_USER: moodle
-          POSTGRES_PASSWORD: moodle
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
@@ -60,6 +60,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: pgsql, zip, gd, soap, xmlrpc, intl
+          ini-values: max_input_vars=5000
           coverage: none
 
       - name: Cache Composer dependencies
@@ -77,15 +78,7 @@ jobs:
           sudo locale-gen en_AU.UTF-8
 
       - name: Install Moodle + plugins
-        run: |
-          moodle-plugin-ci install \
-            --plugin ./plugin \
-            --extra-plugins ./extra-plugins \
-            --db-host 127.0.0.1 \
-            --db-user moodle \
-            --db-pass moodle \
-            --db-name moodle \
-            --db-port 5432
+        run: moodle-plugin-ci install --plugin ./plugin --extra-plugins ./extra-plugins --db-host=127.0.0.1
         env:
           DB: ${{ matrix.db }}
           MOODLE_BRANCH: ${{ matrix.moodle-branch }}
