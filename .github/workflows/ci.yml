@@ -185,7 +185,7 @@ jobs:
 
       - name: Clone local-vbs-enrol (required by course_registration.feature)
         run: |
-          git clone --depth=1 \
+          git clone --depth=1 --branch main \
             https://github.com/vbsqldaotao/local-vbs-enrol.git \
             $MOODLE_ROOT/public/local/vbs_enrol
 
