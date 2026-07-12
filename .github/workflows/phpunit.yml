@@ -87,4 +87,4 @@ jobs:
           MOODLE_BRANCH: ${{ matrix.moodle-branch }}
 
       - name: PHPUnit
-        run: moodle-plugin-ci phpunit --coverage-text
+        run: moodle-plugin-ci phpunit

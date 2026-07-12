@@ -74,7 +74,9 @@ jobs:
             https://github.com/moodle/moodle.git $MOODLE_ROOT
 
       - name: Place plugin under local/vbs_myoverview
-        run: cp -r plugin $MOODLE_ROOT/local/vbs_myoverview
+        run: |
+          mkdir -p $MOODLE_ROOT/public/local
+          cp -r plugin $MOODLE_ROOT/public/local/vbs_myoverview
 
       - name: Composer install (Moodle vendor + PHPUnit)
         run: |
@@ -101,7 +103,7 @@ jobs:
             echo "\$CFG->directorypermissions = 0777;"
             echo "\$CFG->phpunit_prefix   = 'phpu_';"
             echo "\$CFG->phpunit_dataroot = '$MOODLE_PHPU_DATA';"
-            echo "require_once(__DIR__ . '/lib/setup.php');"
+            echo "require_once(__DIR__ . '/public/lib/setup.php');"
           } > $MOODLE_ROOT/config.php
 
       - name: Install en_AU.UTF-8 locale (required by Moodle bootstrap)
@@ -112,7 +114,7 @@ jobs:
       - name: Initialise PHPUnit environment
         run: |
           cd $MOODLE_ROOT
-          php admin/tool/phpunit/cli/init.php
+          php public/admin/tool/phpunit/cli/init.php
 
       - name: PHPUnit — local_vbs_myoverview
         run: |
@@ -177,7 +179,9 @@ jobs:
             https://github.com/moodle/moodle.git $MOODLE_ROOT
 
       - name: Place plugin under local/vbs_myoverview
-        run: cp -r plugin $MOODLE_ROOT/local/vbs_myoverview
+        run: |
+          mkdir -p $MOODLE_ROOT/public/local
+          cp -r plugin $MOODLE_ROOT/public/local/vbs_myoverview
 
       - name: Composer install (Moodle vendor + Behat)
         run: |
@@ -227,17 +231,17 @@ jobs:
             echo "    ],"
             echo "  ],"
             echo "];"
-            echo "require_once(__DIR__ . '/lib/setup.php');"
+            echo "require_once(__DIR__ . '/public/lib/setup.php');"
           } > $MOODLE_ROOT/config.php
 
       - name: Initialise Behat environment
         run: |
           cd $MOODLE_ROOT
-          php admin/tool/behat/cli/init.php
+          php public/admin/tool/behat/cli/init.php
 
       - name: Start PHP built-in web server
         run: |
-          php -S 0.0.0.0:8000 -t $MOODLE_ROOT &
+          php -S 0.0.0.0:8000 -t $MOODLE_ROOT/public &
           timeout 30 bash -c 'until curl -sf http://localhost:8000/ >/dev/null 2>&1; do sleep 1; done'
 
       - name: Run Behat — @local_vbs_myoverview
