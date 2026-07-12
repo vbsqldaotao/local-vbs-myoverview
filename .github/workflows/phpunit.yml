@@ -28,7 +28,7 @@ jobs:
       fail-fast: false
       matrix:
         moodle-branch: ['MOODLE_502_STABLE']
-        php: ['8.2']
+        php: ['8.3']
         db: ['pgsql']
 
     steps:

@@ -16,7 +16,7 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: '8.3'
           tools: none
           coverage: none
 
@@ -34,7 +34,7 @@ jobs:
   # moodlehq/moodle-plugin-ci ^4 depends on moodlehq/moodle-local_ci which is
   # not on Packagist. We set up Moodle directly to avoid that broken dependency.
   phpunit:
-    name: PHPUnit (Moodle 5.2 / PHP 8.2)
+    name: PHPUnit (Moodle 5.2 / PHP 8.3)
     runs-on: ubuntu-22.04
 
     env:
@@ -63,7 +63,7 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: '8.3'
           extensions: pgsql, zip, gd, curl, soap, intl, mbstring, xml
           ini-values: max_input_vars=5000
           coverage: none
@@ -132,7 +132,7 @@ jobs:
   #      (e.g. courses_per_page). If pagination scenario runs with the default
   #      page size, load-more will not appear. Fix the fixture key accordingly.
   behat:
-    name: Behat (Moodle 5.2 / PHP 8.2 / Chrome)
+    name: Behat (Moodle 5.2 / PHP 8.3 / Chrome)
     runs-on: ubuntu-22.04
 
     env:
@@ -166,7 +166,7 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: '8.3'
           extensions: pgsql, zip, gd, curl, soap, intl, mbstring, xml
           ini-values: max_input_vars=5000
           coverage: none
