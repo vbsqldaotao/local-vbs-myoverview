@@ -183,6 +183,12 @@ jobs:
           mkdir -p $MOODLE_ROOT/public/local
           cp -r plugin $MOODLE_ROOT/public/local/vbs_myoverview
 
+      - name: Clone local-vbs-enrol (required by course_registration.feature)
+        run: |
+          git clone --depth=1 \
+            https://github.com/vbsqldaotao/local-vbs-enrol.git \
+            $MOODLE_ROOT/public/local/vbs_enrol
+
       - name: Composer install (Moodle vendor + Behat)
         run: |
           cd $MOODLE_ROOT
