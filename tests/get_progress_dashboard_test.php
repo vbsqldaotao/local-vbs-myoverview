@@ -275,4 +275,277 @@ final class get_progress_dashboard_test extends \advanced_testcase {
             "Query count $querycount exceeds budget — likely N+1 regression in completion % path"
         );
     }
+
+    // -----------------------------------------------------------------------
+    // T9 integration tests: in_progress, completed order, plan, certs, security
+    // -----------------------------------------------------------------------
+
+    /**
+     * Skip unless local_vbs_plan tables are installed.
+     */
+    protected function require_plan_tables(): void {
+        global $DB;
+        $dbman = $DB->get_manager();
+        if (!$dbman->table_exists('vbs_plan_year') || !$dbman->table_exists('vbs_plan_item')) {
+            $this->markTestSkipped('local_vbs_plan not installed; training-plan positive path not exercisable.');
+        }
+    }
+
+    /**
+     * Skip unless mod_customcert tables are installed.
+     */
+    protected function require_customcert_tables(): void {
+        global $DB;
+        $dbman = $DB->get_manager();
+        if (!$dbman->table_exists('customcert') || !$dbman->table_exists('customcert_issues')) {
+            $this->markTestSkipped('mod_customcert not installed; certificate positive path not exercisable.');
+        }
+    }
+
+    /**
+     * Insert an active vbs_plan_year for the given year.
+     *
+     * @param int $year
+     * @param string $status
+     * @return int plan year id
+     */
+    protected function create_plan_year(int $year, string $status = 'active'): int {
+        global $DB;
+        $now = time();
+        return (int)$DB->insert_record('vbs_plan_year', (object)[
+            'name'         => "Kế hoạch $year",
+            'year'         => $year,
+            'status'       => $status,
+            'created_by'   => 0,
+            'approved_by'  => 0,
+            'timecreated'  => $now,
+            'timemodified' => $now,
+        ]);
+    }
+
+    /**
+     * Add a plan item (course × cohort) to a plan year.
+     *
+     * @param int $planid
+     * @param int $courseid
+     * @param int $cohortid 0 = everyone
+     * @return int item id
+     */
+    protected function add_plan_item(int $planid, int $courseid, int $cohortid = 0): int {
+        global $DB;
+        $now = time();
+        return (int)$DB->insert_record('vbs_plan_item', (object)[
+            'planid'           => $planid,
+            'courseid'         => $courseid,
+            'cohortid'         => $cohortid,
+            'quota'            => 0,
+            'actual_enrolled'  => 0,
+            'actual_completed' => 0,
+            'timecreated'      => $now,
+            'timemodified'     => $now,
+        ]);
+    }
+
+    /**
+     * Insert a course_completions row directly (bypasses Completion API for a stable fixture).
+     *
+     * @param int $courseid
+     * @param int $userid
+     * @param int $when completion timestamp
+     */
+    protected function complete_course(int $courseid, int $userid, int $when): void {
+        global $DB;
+        $DB->insert_record('course_completions', (object)[
+            'userid'        => $userid,
+            'course'        => $courseid,
+            'timeenrolled'  => $when - DAYSECS,
+            'timestarted'   => $when - DAYSECS,
+            'timecompleted' => $when,
+        ]);
+    }
+
+    /**
+     * Learner enrolled in 2 non-completed courses → in_progress_courses count = 2.
+     */
+    public function test_get_progress_dashboard_in_progress(): void {
+        $gen     = $this->getDataGenerator();
+        $learner = $gen->create_user();
+        $this->setUser($learner);
+
+        $course1 = $gen->create_course(['enablecompletion' => 1]);
+        $course2 = $gen->create_course(['enablecompletion' => 1]);
+        $gen->enrol_user($learner->id, $course1->id);
+        $gen->enrol_user($learner->id, $course2->id);
+
+        $result = $this->call((int)$learner->id);
+
+        $this->assertCount(2, $result['in_progress_courses'], 'Expected 2 in-progress courses');
+
+        $cids = array_column($result['in_progress_courses'], 'courseid');
+        $this->assertContains((int)$course1->id, $cids);
+        $this->assertContains((int)$course2->id, $cids);
+    }
+
+    /**
+     * Three completed courses with different timecompleted → result must be newest-first (DESC).
+     */
+    public function test_completed_courses_sorted_desc(): void {
+        $gen     = $this->getDataGenerator();
+        $learner = $gen->create_user();
+        $this->setUser($learner);
+        $now     = time();
+
+        $courseA = $gen->create_course(['enablecompletion' => 1]);
+        $courseB = $gen->create_course(['enablecompletion' => 1]);
+        $courseC = $gen->create_course(['enablecompletion' => 1]);
+        $gen->enrol_user($learner->id, $courseA->id);
+        $gen->enrol_user($learner->id, $courseB->id);
+        $gen->enrol_user($learner->id, $courseC->id);
+
+        // Complete in order: oldest A, middle B, newest C.
+        $this->complete_course((int)$courseA->id, (int)$learner->id, $now - (10 * DAYSECS));
+        $this->complete_course((int)$courseB->id, (int)$learner->id, $now - (5 * DAYSECS));
+        $this->complete_course((int)$courseC->id, (int)$learner->id, $now - DAYSECS);
+
+        $result = $this->call((int)$learner->id);
+
+        $this->assertCount(3, $result['completed_courses']);
+        $times = array_column($result['completed_courses'], 'timecompleted');
+        $this->assertGreaterThan($times[1], $times[0], 'First row must be newer than second');
+        $this->assertGreaterThan($times[2], $times[1], 'Second row must be newer than third');
+    }
+
+    /**
+     * Training plan aggregate: not_started / in_progress / completed counts reflect reality.
+     *
+     * Requires local_vbs_plan. Skips otherwise (CI installs it; vanilla dev does not).
+     */
+    public function test_training_plan_counts(): void {
+        $this->require_plan_tables();
+        $gen     = $this->getDataGenerator();
+        $learner = $gen->create_user();
+        $this->setUser($learner);
+        $now     = time();
+        $year    = (int)date('Y');
+
+        $cCompleted  = $gen->create_course(['enablecompletion' => 1]);
+        $cInProgress = $gen->create_course(['enablecompletion' => 1]);
+        $cNotStarted = $gen->create_course(['enablecompletion' => 1]);
+
+        $gen->enrol_user($learner->id, $cCompleted->id);
+        $gen->enrol_user($learner->id, $cInProgress->id);
+        // cNotStarted: in plan but learner is NOT enrolled.
+
+        $this->complete_course((int)$cCompleted->id, (int)$learner->id, $now - DAYSECS);
+
+        $planid = $this->create_plan_year($year, 'active');
+        $this->add_plan_item($planid, (int)$cCompleted->id, 0);
+        $this->add_plan_item($planid, (int)$cInProgress->id, 0);
+        $this->add_plan_item($planid, (int)$cNotStarted->id, 0);
+
+        $result = $this->call((int)$learner->id);
+
+        $plan = $result['training_plan'];
+        $this->assertSame($year, $plan['year']);
+        $this->assertSame(3, $plan['total']);
+        $this->assertSame(1, $plan['completed']);
+        $this->assertSame(1, $plan['in_progress']);
+        $this->assertSame(1, $plan['not_started']);
+    }
+
+    /**
+     * learner2 sees only her own certificates — not learner's (AC-F02-06 data isolation).
+     *
+     * Requires mod_customcert. Skips otherwise.
+     */
+    public function test_certificates_data_isolation(): void {
+        global $DB;
+        $this->require_customcert_tables();
+        $gen      = $this->getDataGenerator();
+        $learner  = $gen->create_user();
+        $learner2 = $gen->create_user();
+        $now      = time();
+
+        $course  = $gen->create_course();
+        $gen->enrol_user($learner->id, $course->id);
+        $gen->enrol_user($learner2->id, $course->id);
+
+        $certgen  = $gen->get_plugin_generator('mod_customcert');
+        $certinst = $certgen->create_instance(['course' => $course->id, 'name' => 'Chứng chỉ X']);
+
+        // Issue cert ONLY to learner.
+        $DB->insert_record('customcert_issues', (object)[
+            'userid'       => $learner->id,
+            'customcertid' => $certinst->id,
+            'code'         => 'ISOLATE01',
+            'emailed'      => 0,
+            'timecreated'  => $now - DAYSECS,
+        ]);
+
+        // learner2 must NOT see learner's certificate.
+        $this->setUser($learner2);
+        $result2 = $this->call((int)$learner2->id);
+        $this->assertSame([], $result2['certificates'], 'learner2 must not see learner certs');
+
+        // learner sees her own certificate.
+        $this->setUser($learner);
+        $result1 = $this->call((int)$learner->id);
+        $this->assertCount(1, $result1['certificates'], 'learner must see her own cert');
+        $this->assertSame('Chứng chỉ X', $result1['certificates'][0]['cert_name']);
+        $this->assertStringContainsString(
+            '/mod/customcert/view.php',
+            $result1['certificates'][0]['download_url'],
+            'download_url must point to customcert view'
+        );
+    }
+
+    /**
+     * User without any plan → training_plan.year = 0 (frontend hides panel).
+     * AC-F02-03 / TC-03-02 explicit assertion.
+     */
+    public function test_training_plan_hidden_when_no_plan(): void {
+        $gen  = $this->getDataGenerator();
+        $user = $gen->create_user();
+        $this->setUser($user);
+
+        $result = $this->call((int)$user->id);
+
+        $this->assertSame(0, $result['training_plan']['year'],
+            'training_plan.year must be 0 when no active plan exists — frontend uses this to hide the panel');
+    }
+
+    /**
+     * TC-07-04: business query count ≤6 for a user with 2 active enrolments
+     * each having 2 tracked activities (the N+1 regression target).
+     *
+     * table_exists() results are pre-warmed so infrastructure probes do not
+     * count against the 6-query business budget.
+     */
+    public function test_query_count_leq_6(): void {
+        global $DB;
+        $gen     = $this->getDataGenerator();
+        $learner = $gen->create_user();
+        $this->setUser($learner);
+
+        for ($i = 0; $i < 2; $i++) {
+            $course = $gen->create_course(['enablecompletion' => 1]);
+            $gen->enrol_user($learner->id, $course->id);
+            $gen->create_module('page', ['course' => $course->id, 'completion' => COMPLETION_TRACKING_MANUAL]);
+            $gen->create_module('page', ['course' => $course->id, 'completion' => COMPLETION_TRACKING_MANUAL]);
+        }
+
+        // Pre-warm table_exists() cache so schema probes don't inflate the count.
+        $dbman = $DB->get_manager();
+        $dbman->table_exists('customcert');
+        $dbman->table_exists('customcert_issues');
+        $dbman->table_exists('vbs_plan_year');
+        $dbman->table_exists('vbs_plan_item');
+
+        $before = $DB->perf_get_queries();
+        get_progress_dashboard::execute((int)$learner->id);
+        $delta = $DB->perf_get_queries() - $before;
+
+        $this->assertLessThanOrEqual(6, $delta,
+            "Too many DB queries: $delta — likely N+1 regression in completion % path (AC-F02-07 TC-07-04)");
+    }
 }
