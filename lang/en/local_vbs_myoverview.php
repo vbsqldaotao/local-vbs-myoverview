@@ -99,3 +99,15 @@ $string['progress:loaderror'] = 'Could not load this section. Please try again l
 $string['schedule_type_facetoface'] = 'Face-to-face';
 $string['schedule_type_quiz'] = 'Exam / Assessment';
 $string['schedule_type_vbs_exam'] = 'VBS Exam session';
+
+// F02 — Progress dashboard widget (VBS-406).
+$string['progress_dashboard'] = 'Learning progress';
+$string['inprogress_courses'] = 'Courses in progress';
+$string['completed_courses'] = 'Completed courses';
+$string['training_plan'] = 'Training plan';
+$string['issued_certificates'] = 'Issued certificates';
+$string['empty_inprogress'] = 'You have no courses in progress.';
+$string['empty_completed'] = 'You have not completed any courses yet.';
+$string['empty_certificates'] = 'No certificates have been issued yet.';
+$string['download_cert'] = 'Download certificate';
+$string['download_pdf'] = 'Download PDF';
