@@ -39,6 +39,13 @@ $userid = optional_param('userid', $USER->id, PARAM_INT);
 // Front-end mock switch: lets FE be exercised before the BE WS lands (VBS-159).
 $mock = optional_param('vbsmock', 0, PARAM_BOOL);
 
+// AC-F02-06 / TC-06-02: deny page access when viewing another user without the
+// required capability. The WS has its own check; this guards the page shell too.
+if ($userid != $USER->id) {
+    $usercontext = context_user::instance($userid);
+    require_capability('moodle/user:viewdetails', $usercontext);
+}
+
 $context = context_user::instance($USER->id);
 $PAGE->set_context($context);
 $PAGE->set_url(new moodle_url('/local/vbs_myoverview/progress.php', $userid == $USER->id ? [] : ['userid' => $userid]));
