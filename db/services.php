@@ -35,4 +35,12 @@ $functions = [
         'capabilities' => '',
         'services'    => [],
     ],
+    'local_vbs_myoverview_get_progress_dashboard' => [
+        'classname'     => 'local_vbs_myoverview\external\get_progress_dashboard',
+        'methodname'    => 'execute',
+        'description'   => 'Get learning progress dashboard data for a user',
+        'type'          => 'read',
+        'ajax'          => true,
+        'loginrequired' => true,
+    ],
 ];

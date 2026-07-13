@@ -48,3 +48,15 @@ $string['lifecycle_completed'] = 'Hoàn thành';
 $string['enrollment_assigned'] = 'Phân công';
 $string['enrollment_pending_approval'] = 'Chờ duyệt';
 $string['enrollment_open_for_registration'] = 'Mở đăng ký';
+
+// Progress dashboard (F02).
+$string['progress_dashboard'] = 'Tiến độ học tập';
+$string['inprogress_courses'] = 'Khóa học đang học';
+$string['completed_courses'] = 'Khóa học đã hoàn thành';
+$string['training_plan'] = 'Kế hoạch đào tạo';
+$string['issued_certificates'] = 'Chứng chỉ đã cấp';
+$string['empty_inprogress'] = 'Bạn chưa có khóa học nào đang học';
+$string['empty_completed'] = 'Bạn chưa hoàn thành khóa học nào';
+$string['empty_certificates'] = 'Bạn chưa được cấp chứng chỉ nào';
+$string['download_cert'] = 'Tải chứng chỉ';
+$string['download_pdf'] = 'Tải PDF';
