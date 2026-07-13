@@ -176,6 +176,12 @@ class enrich_courses extends external_api {
                     new external_single_structure([
                         'label' => new external_value(PARAM_TEXT, 'Badge label'),
                         'classes' => new external_value(PARAM_TEXT, 'Bootstrap classes for the badge chip'),
+                        'type' => new external_value(
+                            PARAM_TEXT,
+                            'Badge category: delivery | lifecycle | enrollment — emitted as data-badge-type for QA anchors (VBS-141)',
+                            VALUE_DEFAULT,
+                            ''
+                        ),
                     ]),
                     'Ordered badges: delivery → lifecycle → enrollment'
                 ),

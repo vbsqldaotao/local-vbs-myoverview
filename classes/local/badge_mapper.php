@@ -72,6 +72,7 @@ class badge_mapper {
         return [
             'label' => get_string('delivery_' . $mode, 'local_vbs_myoverview'),
             'classes' => self::OUTLINE_DELIVERY,
+            'type' => 'delivery',
         ];
     }
 
@@ -85,6 +86,7 @@ class badge_mapper {
         return [
             'label' => get_string('lifecycle_' . $state, 'local_vbs_myoverview'),
             'classes' => self::lifecycle_classes($state),
+            'type' => 'lifecycle',
         ];
     }
 
@@ -98,6 +100,7 @@ class badge_mapper {
         return [
             'label' => get_string('enrollment_' . $state, 'local_vbs_myoverview'),
             'classes' => self::enrollment_classes($state),
+            'type' => 'enrollment',
         ];
     }
 
