@@ -94,3 +94,15 @@ $string['progress:empty_certificates'] = 'Chưa có chứng chỉ nào được 
 // Loading / lỗi.
 $string['progress:loading'] = 'Đang tải…';
 $string['progress:loaderror'] = 'Không tải được section này. Vui lòng thử lại sau.';
+
+// Progress dashboard WS strings (VBS-404 / T7).
+$string['progress_dashboard'] = 'Tiến độ học tập';
+$string['inprogress_courses'] = 'Khóa học đang học';
+$string['completed_courses'] = 'Khóa học đã hoàn thành';
+$string['training_plan'] = 'Kế hoạch đào tạo';
+$string['issued_certificates'] = 'Chứng chỉ đã cấp';
+$string['empty_inprogress'] = 'Bạn chưa có khóa học nào đang học';
+$string['empty_completed'] = 'Bạn chưa hoàn thành khóa học nào';
+$string['empty_certificates'] = 'Bạn chưa được cấp chứng chỉ nào';
+$string['download_cert'] = 'Tải chứng chỉ';
+$string['download_pdf'] = 'Tải PDF';
