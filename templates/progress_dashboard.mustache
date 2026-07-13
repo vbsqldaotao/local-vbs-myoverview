@@ -1,0 +1,147 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    F02 progress dashboard — 4 panels: in-progress courses, completed courses,
+    training plan (conditional), and issued certificates.
+
+    All date formatting and has_training_plan flag are set by the AMD module
+    before rendering; this template contains no logic, only Mustache conditionals.
+
+    @template  local_vbs_myoverview/progress_dashboard
+    @copyright 2026 VBS
+    @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+
+    Example context (json):
+    {
+        "in_progress_courses": [
+            {
+                "courseid": 1,
+                "fullname": "Kế toán cơ bản",
+                "courseurl": "/course/view.php?id=1",
+                "completion_pct": 65,
+                "deadline_display": "30/09/2026",
+                "has_deadline": true,
+                "delivery_mode": "blended"
+            }
+        ],
+        "completed_courses": [
+            {
+                "courseid": 2,
+                "fullname": "An toàn lao động",
+                "completed_date_display": "15/03/2026",
+                "cert_url": "/mod/customcert/view.php?id=3&downloadown=1",
+                "cert_name": "Chứng chỉ ATLĐ"
+            }
+        ],
+        "has_training_plan": true,
+        "training_plan": {
+            "year": 2026,
+            "total": 5,
+            "completed": 2,
+            "in_progress": 1,
+            "not_started": 2
+        },
+        "certificates": [
+            {
+                "issueid": 1,
+                "cert_name": "Chứng chỉ ATLĐ",
+                "course_fullname": "An toàn lao động",
+                "issued_date_display": "15/03/2026",
+                "download_url": "/mod/customcert/view.php?id=3&downloadown=1"
+            }
+        ]
+    }
+}}
+<div id="progress-dashboard-container">
+
+    {{! Panel 1: Courses in progress }}
+    <div class="card mb-3">
+        <div class="card-header">
+            {{#str}}inprogress_courses, local_vbs_myoverview{{/str}}
+        </div>
+        <div class="card-body">
+            {{#in_progress_courses}}
+            <div class="course-item mb-2">
+                <a href="{{courseurl}}">{{fullname}}</a>
+                <span class="badge badge-primary ml-2">{{completion_pct}}%</span>
+                {{#delivery_mode}}<span class="badge badge-info ml-1">{{delivery_mode}}</span>{{/delivery_mode}}
+                {{#has_deadline}}<span class="text-muted ml-2">{{deadline_display}}</span>{{/has_deadline}}
+            </div>
+            {{/in_progress_courses}}
+            {{^in_progress_courses}}
+            <p class="text-muted">{{#str}}empty_inprogress, local_vbs_myoverview{{/str}}</p>
+            {{/in_progress_courses}}
+        </div>
+    </div>
+
+    {{! Panel 2: Completed courses }}
+    <div class="card mb-3">
+        <div class="card-header">
+            {{#str}}completed_courses, local_vbs_myoverview{{/str}}
+        </div>
+        <div class="card-body">
+            {{#completed_courses}}
+            <div class="course-item mb-2">
+                <span>{{fullname}}</span>
+                <span class="text-muted ml-2">{{completed_date_display}}</span>
+                {{#cert_url}}<a href="{{cert_url}}" class="ml-2">{{#str}}download_cert, local_vbs_myoverview{{/str}}</a>{{/cert_url}}
+            </div>
+            {{/completed_courses}}
+            {{^completed_courses}}
+            <p class="text-muted">{{#str}}empty_completed, local_vbs_myoverview{{/str}}</p>
+            {{/completed_courses}}
+        </div>
+    </div>
+
+    {{! Panel 3: Training plan — only rendered when has_training_plan is true (AC-F02-03 TC-03-02) }}
+    {{#has_training_plan}}
+    <div class="card mb-3">
+        <div class="card-header">
+            {{#str}}training_plan, local_vbs_myoverview{{/str}} {{training_plan.year}}
+        </div>
+        <div class="card-body">
+            <p>
+                Total: {{training_plan.total}} |
+                Completed: {{training_plan.completed}} |
+                In progress: {{training_plan.in_progress}} |
+                Not started: {{training_plan.not_started}}
+            </p>
+        </div>
+    </div>
+    {{/has_training_plan}}
+
+    {{! Panel 4: Issued certificates }}
+    <div class="card mb-3">
+        <div class="card-header">
+            {{#str}}issued_certificates, local_vbs_myoverview{{/str}}
+        </div>
+        <div class="card-body">
+            {{#certificates}}
+            <div class="cert-item mb-2">
+                <span>{{cert_name}}</span>
+                <span class="text-muted ml-2">{{course_fullname}}</span>
+                <span class="text-muted ml-2">{{issued_date_display}}</span>
+                <a href="{{download_url}}" class="ml-2">{{#str}}download_pdf, local_vbs_myoverview{{/str}}</a>
+            </div>
+            {{/certificates}}
+            {{^certificates}}
+            <p class="text-muted">{{#str}}empty_certificates, local_vbs_myoverview{{/str}}</p>
+            {{/certificates}}
+        </div>
+    </div>
+
+</div>
