@@ -48,3 +48,15 @@ $string['lifecycle_completed'] = 'Completed';
 $string['enrollment_assigned'] = 'Assigned';
 $string['enrollment_pending_approval'] = 'Pending approval';
 $string['enrollment_open_for_registration'] = 'Open for registration';
+
+// Progress dashboard (F02).
+$string['progress_dashboard'] = 'Learning progress';
+$string['inprogress_courses'] = 'Courses in progress';
+$string['completed_courses'] = 'Completed courses';
+$string['training_plan'] = 'Training plan';
+$string['issued_certificates'] = 'Issued certificates';
+$string['empty_inprogress'] = 'You have no courses in progress.';
+$string['empty_completed'] = 'You have not completed any courses yet.';
+$string['empty_certificates'] = 'No certificates have been issued yet.';
+$string['download_cert'] = 'Download certificate';
+$string['download_pdf'] = 'Download PDF';
